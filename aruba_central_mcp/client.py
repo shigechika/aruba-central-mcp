@@ -132,6 +132,7 @@ class ArubaClient:
             logger.debug("fetch_all: offset=%d, n=%d, total=%d", offset, n, total)
             if n == 0:
                 break
+            new_count = 0
             for item in items:
                 item_id = item.get("id") or item.get("macAddress") or ""
                 if item_id and item_id in seen_ids:
@@ -139,6 +140,14 @@ class ArubaClient:
                 if item_id:
                     seen_ids.add(item_id)
                 all_items.append(item)
+                new_count += 1
+            if new_count == 0:
+                # All items were duplicates — API ignores offset
+                logger.debug(
+                    "fetch_all: no new items on page (API may not support offset). "
+                    "Returning %d of %d total.", len(all_items), total,
+                )
+                break
             offset += n
             if n < limit or (total and offset >= total):
                 break
