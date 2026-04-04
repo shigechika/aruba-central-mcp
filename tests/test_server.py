@@ -56,24 +56,26 @@ SAMPLE_SWITCHES = [
 
 SAMPLE_CLIENTS = [
     {
-        "name": "iPhone",
+        "clientName": "iPhone",
         "macAddress": "ff:ee:dd:cc:bb:aa",
-        "ip": "172.16.1.10",
-        "network": "eduroam",
-        "band": "5.0",
-        "signal_db": "-55",
-        "associatedDeviceName": "AP-01",
-        "authentication_type": "DOT1X",
+        "ipv4": "172.16.1.10",
+        "wlanName": "eduroam",
+        "wirelessBand": "5 GHz",
+        "snr": "45",
+        "connectedTo": "AP-01",
+        "authenticationType": "DOT1X",
+        "siteName": "Main Campus",
     },
     {
-        "name": "Laptop",
+        "clientName": "Laptop",
         "macAddress": "aa:bb:cc:dd:ee:ff",
-        "ip": "172.16.1.11",
-        "network": "nichidai-wifi",
-        "band": "2.4",
-        "signal_db": "-72",
-        "associatedDeviceName": "AP-01",
-        "authentication_type": "MAC",
+        "ipv4": "172.16.1.11",
+        "wlanName": "nichidai-wifi",
+        "wirelessBand": "2.4 GHz",
+        "snr": "28",
+        "connectedTo": "AP-01",
+        "authenticationType": "MAC",
+        "siteName": "Main Campus",
     },
 ]
 
@@ -134,7 +136,7 @@ class TestFormatFunctions:
         result = _format_client(SAMPLE_CLIENTS[0])
         assert "iPhone" in result
         assert "eduroam" in result
-        assert "5.0" in result
+        assert "5 GHz" in result
 
 
 class TestListAps:
@@ -191,7 +193,7 @@ class TestListClients:
 
     def test_filter_by_band(self, mock_client):
         """Filter clients by band."""
-        result = list_clients(band="2.4")
+        result = list_clients(band="2.4 GHz")
         assert "Laptop" in result
         assert "iPhone" not in result
 

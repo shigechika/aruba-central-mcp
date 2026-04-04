@@ -90,17 +90,18 @@ def _format_switch(sw: dict) -> str:
 
 def _format_client(cl: dict) -> str:
     """Format a single wireless client record as a readable string."""
-    name = cl.get("name", cl.get("macAddress", "unknown"))
+    name = cl.get("clientName") or cl.get("macAddress", "unknown")
     mac = cl.get("macAddress", "")
-    ip = cl.get("ip", "")
-    ssid = cl.get("network", "")
-    band = cl.get("band", "")
-    signal = cl.get("signal_db", "")
-    ap_name = cl.get("associatedDeviceName", "")
-    auth = cl.get("authentication_type", "")
+    ip = cl.get("ipv4", "")
+    ssid = cl.get("wlanName", "")
+    band = cl.get("wirelessBand", "")
+    signal = cl.get("snr", "")
+    ap_name = cl.get("connectedTo", "")
+    auth = cl.get("authenticationType", "")
+    site = cl.get("siteName", "")
     return (
         f"- **{name}** mac={mac} ip={ip} ssid={ssid} "
-        f"band={band}GHz signal={signal}dBm ap={ap_name} auth={auth}"
+        f"band={band} snr={signal}dB ap={ap_name} auth={auth} site={site}"
     )
 
 
@@ -167,9 +168,9 @@ def list_clients(ssid: str = "", band: str = "") -> str:
 
     if ssid:
         ssid_lower = ssid.lower()
-        items = [cl for cl in items if ssid_lower in (cl.get("network") or "").lower()]
+        items = [cl for cl in items if ssid_lower in (cl.get("wlanName") or "").lower()]
     if band:
-        items = [cl for cl in items if cl.get("band") == band]
+        items = [cl for cl in items if cl.get("wirelessBand") == band]
 
     if not items:
         return "No clients found."
@@ -265,14 +266,9 @@ def get_site_summary() -> str:
         else:
             sites[site]["aps_offline"] += 1
 
-    # Aggregate clients by associated AP's site
-    ap_site_map = {
-        (ap.get("deviceName") or "").lower(): ap.get("siteName") or "(no site)"
-        for ap in ap_items
-    }
+    # Aggregate clients by site (New Central API provides siteName directly)
     for cl in client_items:
-        ap_name = (cl.get("associatedDeviceName") or "").lower()
-        site = ap_site_map.get(ap_name, "(unknown site)")
+        site = cl.get("siteName") or "(no site)"
         if site not in sites:
             sites[site] = {"aps": 0, "aps_online": 0, "aps_offline": 0, "clients": 0}
         sites[site]["clients"] += 1
