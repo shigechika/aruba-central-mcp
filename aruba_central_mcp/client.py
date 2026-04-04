@@ -122,6 +122,7 @@ class ArubaClient:
             List of item dicts.
         """
         all_items: list[dict] = []
+        seen_ids: set[str] = set()
         offset = 0
         for _ in range(max_pages):
             resp = self.get(path, params={"limit": limit, "offset": offset})
@@ -131,10 +132,13 @@ class ArubaClient:
             logger.debug("fetch_all: offset=%d, n=%d, total=%d", offset, n, total)
             if n == 0:
                 break
-            if total and offset + n > total:
-                all_items.extend(items[: total - offset])
-                break
-            all_items.extend(items)
+            for item in items:
+                item_id = item.get("id") or item.get("macAddress") or ""
+                if item_id and item_id in seen_ids:
+                    continue
+                if item_id:
+                    seen_ids.add(item_id)
+                all_items.append(item)
             offset += n
             if n < limit or (total and offset >= total):
                 break

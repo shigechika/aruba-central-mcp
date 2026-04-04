@@ -156,6 +156,35 @@ class TestFetchAll:
             assert len(items) == 3
             assert call_count == 2
 
+    def test_deduplication(self, client):
+        """Duplicate items across pages are deduplicated by id."""
+        with respx.mock:
+            respx.post(TOKEN_URL).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={"access_token": "test-token", "expires_in": 7200},
+                )
+            )
+
+            def side_effect(request):
+                offset = int(request.url.params.get("offset", 0))
+                if offset == 0:
+                    return httpx.Response(
+                        200,
+                        json={"items": [{"id": "a"}, {"id": "b"}], "total": 3},
+                    )
+                else:
+                    # "b" is duplicated across pages
+                    return httpx.Response(
+                        200,
+                        json={"items": [{"id": "b"}, {"id": "c"}], "total": 3},
+                    )
+
+            respx.get(f"https://{BASE_URL}/test").mock(side_effect=side_effect)
+            items = client.fetch_all("/test", limit=2)
+            assert len(items) == 3
+            assert [i["id"] for i in items] == ["a", "b", "c"]
+
     def test_empty_response(self, client):
         """Empty response returns empty list."""
         with respx.mock:
