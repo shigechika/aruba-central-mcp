@@ -2,4 +2,11 @@
 
 from aruba_central_mcp.server import mcp
 
-mcp.run(transport="stdio")
+
+def main():
+    """Entry point for console_scripts."""
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

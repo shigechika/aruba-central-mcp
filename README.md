@@ -29,7 +29,21 @@ Exposes access point, switch, and wireless client status to MCP-compatible AI as
 ## Installation
 
 ```bash
-pip install -e .
+pip install aruba-central-mcp
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uvx aruba-central-mcp
+```
+
+For development:
+
+```bash
+git clone https://github.com/shigechika/aruba-central-mcp.git
+cd aruba-central-mcp
+pip install -e ".[test]"
 ```
 
 ## Configuration
@@ -58,14 +72,22 @@ For details, see:
 
 ### Claude Code
 
-Add to your MCP settings (`.claude/settings.json` or project-level):
+```bash
+claude mcp add aruba-central \
+  -e ARUBA_CENTRAL_BASE_URL=apigw-uswest4.central.arubanetworks.com \
+  -e ARUBA_CENTRAL_CLIENT_ID=your-client-id \
+  -e ARUBA_CENTRAL_CLIENT_SECRET=your-client-secret \
+  -- uvx aruba-central-mcp
+```
+
+Or add to `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "aruba-central": {
-      "command": "python3",
-      "args": ["-m", "aruba_central_mcp"],
+      "command": "uvx",
+      "args": ["aruba-central-mcp"],
       "env": {
         "ARUBA_CENTRAL_BASE_URL": "apigw-uswest4.central.arubanetworks.com",
         "ARUBA_CENTRAL_CLIENT_ID": "your-client-id",
@@ -84,8 +106,8 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "aruba-central": {
-      "command": "python3",
-      "args": ["-m", "aruba_central_mcp"],
+      "command": "uvx",
+      "args": ["aruba-central-mcp"],
       "env": {
         "ARUBA_CENTRAL_BASE_URL": "apigw-uswest4.central.arubanetworks.com",
         "ARUBA_CENTRAL_CLIENT_ID": "your-client-id",

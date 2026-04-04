@@ -30,6 +30,9 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+[project.scripts]
+aruba-central-mcp = "aruba_central_mcp.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/shigechika/aruba-central-mcp"
 Repository = "https://github.com/shigechika/aruba-central-mcp"
