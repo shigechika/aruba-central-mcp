@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.shigechika/aruba-central-mcp -->
+
 # aruba-central-mcp
 
 English | [日本語](README.ja.md)
