@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.shigechika/aruba-central-mcp",
+  "title": "Aruba Central MCP",
+  "description": "MCP server for Aruba Central: expose AP, switch, and client status to AI assistants",
+  "repository": {
+    "url": "https://github.com/shigechika/aruba-central-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "aruba-central-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

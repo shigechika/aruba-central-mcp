@@ -30,6 +30,11 @@ dependencies = [
     "httpx>=0.27",
 ]
 
+[project.urls]
+Homepage = "https://github.com/shigechika/aruba-central-mcp"
+Repository = "https://github.com/shigechika/aruba-central-mcp"
+Issues = "https://github.com/shigechika/aruba-central-mcp/issues"
+
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "respx"]
 
