@@ -40,6 +40,18 @@ pip install -e .
 | `ARUBA_CENTRAL_CLIENT_ID` | OAuth2 クライアント ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 クライアントシークレット | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 
+### API 資格情報の取得方法
+
+1. [HPE GreenLake Platform](https://common.cloud.hpe.com/) にログイン
+2. **Manage Workspace** > **Personal API clients** に移動
+3. **Create Personal API client** をクリック
+4. ニックネームを入力し、サービスとして **Aruba Central** を選択
+5. `client_id` と `client_secret` をコピー — **シークレットは一度しか表示されません**
+
+詳細は以下を参照:
+- [OAuth APIs for Access Token](https://developer.arubanetworks.com/hpe-aruba-networking-central/docs/api-oauth-access-token)
+- [Making API Calls](https://developer.arubanetworks.com/new-central/docs/making-api-calls)
+
 ## 使い方
 
 ### Claude Code

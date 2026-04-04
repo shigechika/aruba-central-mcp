@@ -40,6 +40,18 @@ Set the following environment variables:
 | `ARUBA_CENTRAL_CLIENT_ID` | OAuth2 client ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 client secret | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 
+### How to obtain API credentials
+
+1. Log in to [HPE GreenLake Platform](https://common.cloud.hpe.com/)
+2. Go to **Manage Workspace** > **Personal API clients**
+3. Click **Create Personal API client**
+4. Enter a nickname and select **Aruba Central** as the service
+5. Copy the `client_id` and `client_secret` — **the secret is shown only once**
+
+For details, see:
+- [OAuth APIs for Access Token](https://developer.arubanetworks.com/hpe-aruba-networking-central/docs/api-oauth-access-token)
+- [Making API Calls](https://developer.arubanetworks.com/new-central/docs/making-api-calls)
+
 ## Usage
 
 ### Claude Code
