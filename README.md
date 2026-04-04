@@ -1,5 +1,7 @@
 # aruba-central-mcp
 
+English | [日本語](README.ja.md)
+
 MCP server for [Aruba Central](https://www.arubanetworks.com/products/network-management-operations/central/) (GreenLake New Central API).
 
 Exposes access point, switch, and wireless client status to MCP-compatible AI assistants (Claude Code, Claude Desktop, etc.) via STDIO transport.
