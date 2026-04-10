@@ -113,6 +113,10 @@ class ArubaClient:
     ) -> list[dict]:
         """Fetch all items from a paginated API endpoint.
 
+        New Central API uses cursor-style pagination: the response contains a
+        ``next`` field whose value must be passed as the ``next`` parameter of
+        the subsequent request. The ``offset`` parameter is silently ignored.
+
         Args:
             path: API path (e.g. PATH_APS).
             limit: Items per page.
@@ -122,33 +126,22 @@ class ArubaClient:
             List of item dicts.
         """
         all_items: list[dict] = []
-        seen_ids: set[str] = set()
-        offset = 0
+        params: dict = {"limit": limit}
         for _ in range(max_pages):
-            resp = self.get(path, params={"limit": limit, "offset": offset})
+            resp = self.get(path, params=params)
             items = resp.get("items", [])
             total = resp.get("total", 0)
+            next_cursor = resp.get("next")
             n = len(items)
-            logger.debug("fetch_all: offset=%d, n=%d, total=%d", offset, n, total)
+            logger.debug(
+                "fetch_all: n=%d, total=%d, next=%s", n, total, next_cursor,
+            )
             if n == 0:
                 break
-            new_count = 0
-            for item in items:
-                item_id = item.get("id") or item.get("macAddress") or ""
-                if item_id and item_id in seen_ids:
-                    continue
-                if item_id:
-                    seen_ids.add(item_id)
-                all_items.append(item)
-                new_count += 1
-            if new_count == 0:
-                # All items were duplicates — API ignores offset
-                logger.debug(
-                    "fetch_all: no new items on page (API may not support offset). "
-                    "Returning %d of %d total.", len(all_items), total,
-                )
+            all_items.extend(items)
+            if not next_cursor:
                 break
-            offset += n
-            if n < limit or (total and offset >= total):
+            if total and len(all_items) >= total:
                 break
+            params["next"] = next_cursor
         return all_items

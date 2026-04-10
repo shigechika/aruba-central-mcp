@@ -107,7 +107,7 @@ class TestGet:
 
 class TestFetchAll:
     def test_single_page(self, client):
-        """Fetch all items from a single page."""
+        """Fetch all items from a single page (no next cursor)."""
         with respx.mock:
             respx.post(TOKEN_URL).mock(
                 return_value=httpx.Response(
@@ -124,8 +124,8 @@ class TestFetchAll:
             items = client.fetch_all("/test", limit=10)
             assert len(items) == 2
 
-    def test_multiple_pages(self, client):
-        """Fetch items across multiple pages."""
+    def test_multiple_pages_with_cursor(self, client):
+        """Fetch items across multiple pages using cursor (next) pagination."""
         with respx.mock:
             respx.post(TOKEN_URL).mock(
                 return_value=httpx.Response(
@@ -137,15 +137,16 @@ class TestFetchAll:
 
             def side_effect(request):
                 nonlocal call_count
-                offset = int(request.url.params.get("offset", 0))
-                if offset == 0:
-                    call_count += 1
+                call_count += 1
+                next_param = request.url.params.get("next")
+                if next_param is None:
+                    # First page
                     return httpx.Response(
                         200,
-                        json={"items": [{"id": 1}, {"id": 2}], "total": 3},
+                        json={"items": [{"id": 1}, {"id": 2}], "total": 3, "next": 2},
                     )
                 else:
-                    call_count += 1
+                    # Subsequent page — no more cursor
                     return httpx.Response(
                         200,
                         json={"items": [{"id": 3}], "total": 3},
@@ -156,8 +157,8 @@ class TestFetchAll:
             assert len(items) == 3
             assert call_count == 2
 
-    def test_deduplication(self, client):
-        """Duplicate items across pages are deduplicated by id."""
+    def test_stops_when_total_reached(self, client):
+        """Fetch stops when accumulated items reach total, even if next is returned."""
         with respx.mock:
             respx.post(TOKEN_URL).mock(
                 return_value=httpx.Response(
@@ -165,25 +166,15 @@ class TestFetchAll:
                     json={"access_token": "test-token", "expires_in": 7200},
                 )
             )
-
-            def side_effect(request):
-                offset = int(request.url.params.get("offset", 0))
-                if offset == 0:
-                    return httpx.Response(
-                        200,
-                        json={"items": [{"id": "a"}, {"id": "b"}], "total": 3},
-                    )
-                else:
-                    # "b" is duplicated across pages
-                    return httpx.Response(
-                        200,
-                        json={"items": [{"id": "b"}, {"id": "c"}], "total": 3},
-                    )
-
-            respx.get(f"https://{BASE_URL}/test").mock(side_effect=side_effect)
+            respx.get(f"https://{BASE_URL}/test").mock(
+                return_value=httpx.Response(
+                    200,
+                    # total=2 reached on first page; next should be ignored
+                    json={"items": [{"id": "a"}, {"id": "b"}], "total": 2, "next": 2},
+                )
+            )
             items = client.fetch_all("/test", limit=2)
-            assert len(items) == 3
-            assert [i["id"] for i in items] == ["a", "b", "c"]
+            assert len(items) == 2
 
     def test_empty_response(self, client):
         """Empty response returns empty list."""
