@@ -1,10 +1,12 @@
 """Tests for MCP server tools."""
 
+import re
 from unittest.mock import patch
 
 import pytest
 
 from aruba_central_mcp.server import (
+    _build_odata_filter,
     _format_ap,
     _format_client,
     _format_switch,
@@ -80,6 +82,32 @@ SAMPLE_CLIENTS = [
 ]
 
 
+def _parse_odata_filter(filter_str):
+    """Parse OData filter string into a dict of field -> value.
+
+    Handles: "field eq 'value'" and "field1 eq 'v1' and field2 eq 'v2'"
+    """
+    if not filter_str:
+        return {}
+    result = {}
+    for clause in re.split(r"\s+and\s+", filter_str):
+        m = re.match(r"(\w+)\s+eq\s+'([^']*)'", clause.strip())
+        if m:
+            result[m.group(1)] = m.group(2)
+    return result
+
+
+def _apply_odata_filter(items, filter_str):
+    """Filter items using parsed OData eq clauses."""
+    filters = _parse_odata_filter(filter_str)
+    if not filters:
+        return items
+    return [
+        item for item in items
+        if all(item.get(k) == v for k, v in filters.items())
+    ]
+
+
 @pytest.fixture(autouse=True)
 def reset():
     """Reset shared client before each test."""
@@ -90,7 +118,7 @@ def reset():
 
 @pytest.fixture
 def mock_client():
-    """Patch _get_client to return a mock with fetch_all."""
+    """Patch _get_client to return a FakeClient with OData filter support."""
 
     class FakeClient:
         def __init__(self):
@@ -98,16 +126,34 @@ def mock_client():
             self.switch_items = SAMPLE_SWITCHES
             self.client_items = SAMPLE_CLIENTS
 
-        def fetch_all(self, path, limit=1000):
+        def fetch_all(self, path, limit=1000, params=None):
             from aruba_central_mcp.client import PATH_APS, PATH_CLIENTS, PATH_SWITCHES
 
             if path == PATH_APS:
-                return self.ap_items
+                items = self.ap_items
             elif path == PATH_SWITCHES:
-                return self.switch_items
+                items = self.switch_items
             elif path == PATH_CLIENTS:
-                return self.client_items
-            return []
+                items = self.client_items
+            else:
+                items = []
+
+            # Apply OData filter if present
+            if params and "filter" in params:
+                items = _apply_odata_filter(items, params["filter"])
+            return items
+
+        def get(self, path, params=None):
+            from aruba_central_mcp.client import PATH_CLIENTS, ArubaAPIError
+
+            # Direct client lookup: /clients/{mac}
+            if path.startswith(PATH_CLIENTS + "/"):
+                mac = path[len(PATH_CLIENTS) + 1:]
+                for cl in self.client_items:
+                    if cl.get("macAddress", "").lower() == mac.lower():
+                        return cl
+                raise ArubaAPIError(f"404 Not Found: {path}")
+            return {}
 
         def close(self):
             pass
@@ -115,6 +161,30 @@ def mock_client():
     fake = FakeClient()
     with patch("aruba_central_mcp.server._get_client", return_value=fake):
         yield fake
+
+
+class TestBuildOdataFilter:
+    def test_single_field(self):
+        """Single field generates correct OData string."""
+        result = _build_odata_filter(siteName="Main Campus")
+        assert result == "siteName eq 'Main Campus'"
+
+    def test_multiple_fields(self):
+        """Multiple fields joined with 'and'."""
+        result = _build_odata_filter(siteName="Main", status="ONLINE")
+        assert "siteName eq 'Main'" in result
+        assert "status eq 'ONLINE'" in result
+        assert " and " in result
+
+    def test_empty_values_skipped(self):
+        """Empty values are excluded from filter."""
+        result = _build_odata_filter(siteName="", status="ONLINE")
+        assert result == "status eq 'ONLINE'"
+
+    def test_all_empty_returns_none(self):
+        """All empty values returns None."""
+        result = _build_odata_filter(siteName="", status="")
+        assert result is None
 
 
 class TestFormatFunctions:
@@ -148,13 +218,13 @@ class TestListAps:
         assert "AP-02" in result
 
     def test_filter_by_site(self, mock_client):
-        """Filter APs by site name."""
-        result = list_aps(site="Main")
+        """Filter APs by site name (server-side OData)."""
+        result = list_aps(site="Main Campus")
         assert "AP-01" in result
         assert "AP-02" not in result
 
     def test_filter_by_status(self, mock_client):
-        """Filter APs by status."""
+        """Filter APs by status (server-side OData)."""
         result = list_aps(status="OFFLINE")
         assert "AP-02" in result
         assert "1 total" in result
@@ -186,13 +256,13 @@ class TestListClients:
         assert "2 total" in result
 
     def test_filter_by_ssid(self, mock_client):
-        """Filter clients by SSID."""
+        """Filter clients by SSID (server-side OData)."""
         result = list_clients(ssid="eduroam")
         assert "iPhone" in result
         assert "Laptop" not in result
 
     def test_filter_by_band(self, mock_client):
-        """Filter clients by band."""
+        """Filter clients by band (server-side OData)."""
         result = list_clients(band="2.4 GHz")
         assert "Laptop" in result
         assert "iPhone" not in result
@@ -205,17 +275,17 @@ class TestListClients:
 
 class TestFindClientByMac:
     def test_found(self, mock_client):
-        """Find client by MAC."""
+        """Find client by MAC via direct API lookup."""
         result = find_client_by_mac("ff:ee:dd:cc:bb:aa")
         assert "iPhone" in result
 
     def test_not_found(self, mock_client):
-        """MAC not found."""
+        """MAC not found returns appropriate message."""
         result = find_client_by_mac("00:00:00:00:00:00")
         assert "No client found" in result
 
     def test_case_insensitive(self, mock_client):
-        """MAC search is case-insensitive."""
+        """MAC lookup is case-insensitive."""
         result = find_client_by_mac("FF:EE:DD:CC:BB:AA")
         assert "iPhone" in result
 

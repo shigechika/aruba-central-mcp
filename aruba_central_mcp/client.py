@@ -16,6 +16,12 @@ TOKEN_URL = "https://sso.common.cloud.hpe.com/as/token.oauth2"
 PATH_APS = "/network-monitoring/v1/aps"
 PATH_SWITCHES = "/network-monitoring/v1/switches"
 PATH_CLIENTS = "/network-monitoring/v1/clients"
+PATH_RADIOS = "/network-monitoring/v1/radios"
+PATH_BSSIDS = "/network-monitoring/v1/bssids"
+PATH_WLANS = "/network-monitoring/v1/wlans"
+PATH_SWARMS = "/network-monitoring/v1/swarms"
+PATH_CLIENTS_TREND = "/network-monitoring/v1/clients-trend"
+PATH_CLIENTS_TOPN_USAGE = "/network-monitoring/v1/clients-topn-usage"
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +115,11 @@ class ArubaClient:
         return resp.json()
 
     def fetch_all(
-        self, path: str, limit: int = 1000, max_pages: int = 20,
+        self,
+        path: str,
+        limit: int = 1000,
+        max_pages: int = 20,
+        params: dict | None = None,
     ) -> list[dict]:
         """Fetch all items from a paginated API endpoint.
 
@@ -121,14 +131,17 @@ class ArubaClient:
             path: API path (e.g. PATH_APS).
             limit: Items per page.
             max_pages: Maximum number of pages to fetch.
+            params: Additional query parameters (e.g. OData filter, site-id).
+                    These are preserved across all page requests.
 
         Returns:
             List of item dicts.
         """
         all_items: list[dict] = []
-        params: dict = {"limit": limit}
+        base_params: dict = {"limit": limit, **(params or {})}
+        page_params = base_params.copy()
         for _ in range(max_pages):
-            resp = self.get(path, params=params)
+            resp = self.get(path, params=page_params)
             items = resp.get("items", [])
             total = resp.get("total", 0)
             next_cursor = resp.get("next")
@@ -143,5 +156,5 @@ class ArubaClient:
                 break
             if total and len(all_items) >= total:
                 break
-            params["next"] = next_cursor
+            page_params = {**base_params, "next": next_cursor}
         return all_items
