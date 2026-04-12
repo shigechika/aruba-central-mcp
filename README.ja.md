@@ -8,13 +8,30 @@
 
 ## 機能
 
-- **6つのツール**で Aruba Central インフラを照会:
+- **15のツール**で Aruba Central インフラを照会:
+
+  **アクセスポイント**
   - `list_aps` — AP 一覧（サイト・ステータスでフィルタ可能）
-  - `list_switches` — スイッチ一覧
-  - `list_clients` — 接続中の無線クライアント一覧（SSID・バンドでフィルタ可能）
-  - `find_client_by_mac` — MAC アドレスでクライアント検索
+  - `list_radios` — AP ラジオ一覧（チャンネル・利用率・ノイズフロア・送信電力）
+  - `list_bssids` — BSSID 一覧
+  - `list_wlans` — WLAN 一覧（SSID・セキュリティ・VLAN）
+  - `list_swarms` — AP スワーム / クラスタ一覧
   - `get_ap_status` — 特定 AP の詳細ステータス
+  - `get_ap_throughput` — AP スループット推移（TX/RX）
+  - `get_top_aps` — 帯域使用量 Top AP（無線/有線/合計）
+
+  **クライアント**
+  - `list_clients` — 接続中の無線クライアント一覧（SSID・バンドでフィルタ可能）
+  - `find_client_by_mac` — MAC アドレスでクライアント検索（直接 API ルックアップ）
+  - `get_clients_trend` — クライアント数推移
+  - `get_top_clients_by_usage` — 帯域使用量 Top クライアント
+  - `get_client_mobility_trail` — クライアントローミング履歴
+
+  **インフラ**
+  - `list_switches` — スイッチ一覧
   - `get_site_summary` — サイト別集約サマリー（AP数・クライアント数）
+
+- **サーバー側 OData フィルタリング**による効率的なクエリ
 - **OAuth2 Client Credentials** 認証（GreenLake SSO）
 - **自動ページネーション**（大量データ対応）
 - **トークン自動リフレッシュ**（期限切れ前に更新）
@@ -140,8 +157,15 @@ python3 -m venv .venv
 [GreenLake New Central API](https://developer.arubanetworks.com/) を使用:
 
 - `/network-monitoring/v1/aps` — アクセスポイント
+- `/network-monitoring/v1/radios` — AP ラジオ
+- `/network-monitoring/v1/bssids` — BSSID
+- `/network-monitoring/v1/wlans` — WLAN
+- `/network-monitoring/v1/swarms` — AP スワーム / クラスタ
 - `/network-monitoring/v1/switches` — スイッチ
-- `/network-monitoring/v1/clients` — 無線クライアント
+- `/network-monitoring/v1/clients` — クライアント
+- `/network-monitoring/v1/clients-trend` — クライアント数推移
+- `/network-monitoring/v1/clients-topn-usage` — Top クライアント
+- `/network-monitoring/v1/top-aps-by-usage` — Top AP
 
 ## ライセンス
 

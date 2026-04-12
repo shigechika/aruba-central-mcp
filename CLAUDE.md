@@ -19,7 +19,7 @@ python3 -m py_compile aruba_central_mcp/client.py  # syntax check
 ## Architecture
 
 - `aruba_central_mcp/client.py` — `ArubaClient`: OAuth2 Client Credentials + httpx + automatic pagination
-- `aruba_central_mcp/server.py` — FastMCP server with 6 tools (list_aps, list_switches, list_clients, find_client_by_mac, get_ap_status, get_site_summary)
+- `aruba_central_mcp/server.py` — FastMCP server with 15 tools: AP tools (list_aps, list_radios, list_bssids, list_wlans, list_swarms, get_ap_status, get_ap_throughput, get_top_aps), Client tools (list_clients, find_client_by_mac, get_clients_trend, get_top_clients_by_usage, get_client_mobility_trail), Infrastructure (list_switches, get_site_summary)
 - Environment variables for configuration: `ARUBA_CENTRAL_BASE_URL`, `ARUBA_CENTRAL_CLIENT_ID`, `ARUBA_CENTRAL_CLIENT_SECRET`
 
 ## Conventions

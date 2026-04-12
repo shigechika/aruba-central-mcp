@@ -10,13 +10,30 @@ Exposes access point, switch, and wireless client status to MCP-compatible AI as
 
 ## Features
 
-- **6 tools** for querying Aruba Central infrastructure:
+- **15 tools** for querying Aruba Central infrastructure:
+
+  **Access Points**
   - `list_aps` — List all access points (with optional site/status filter)
-  - `list_switches` — List all switches
-  - `list_clients` — List connected wireless clients (with optional SSID/band filter)
-  - `find_client_by_mac` — Find a wireless client by MAC address
+  - `list_radios` — List AP radios (channel, utilization, noise floor, TX power)
+  - `list_bssids` — List all BSSIDs
+  - `list_wlans` — List WLANs (SSID, security, VLAN)
+  - `list_swarms` — List AP swarms/clusters
   - `get_ap_status` — Get detailed status of a specific AP
+  - `get_ap_throughput` — Get AP throughput trend (TX/RX over time)
+  - `get_top_aps` — Top APs by bandwidth usage (wireless/wired/total)
+
+  **Clients**
+  - `list_clients` — List connected wireless clients (with optional SSID/band filter)
+  - `find_client_by_mac` — Find a client by MAC address (direct API lookup)
+  - `get_clients_trend` — Client count trend over time
+  - `get_top_clients_by_usage` — Top clients by bandwidth usage
+  - `get_client_mobility_trail` — Client roaming history
+
+  **Infrastructure**
+  - `list_switches` — List all switches
   - `get_site_summary` — Aggregated site-level summary (AP counts, client counts)
+
+- **Server-side OData filtering** for efficient queries
 - **OAuth2 Client Credentials** authentication (GreenLake SSO)
 - **Automatic pagination** for large result sets
 - **Token auto-refresh** before expiration
@@ -142,8 +159,15 @@ python3 -m venv .venv
 This server uses the [GreenLake New Central API](https://developer.arubanetworks.com/):
 
 - `/network-monitoring/v1/aps` — Access points
+- `/network-monitoring/v1/radios` — AP radios
+- `/network-monitoring/v1/bssids` — BSSIDs
+- `/network-monitoring/v1/wlans` — WLANs
+- `/network-monitoring/v1/swarms` — AP swarms/clusters
 - `/network-monitoring/v1/switches` — Switches
-- `/network-monitoring/v1/clients` — Wireless clients
+- `/network-monitoring/v1/clients` — Clients
+- `/network-monitoring/v1/clients-trend` — Client count trends
+- `/network-monitoring/v1/clients-topn-usage` — Top clients by usage
+- `/network-monitoring/v1/top-aps-by-usage` — Top APs by usage
 
 ## License
 
