@@ -196,9 +196,10 @@ def _format_swarm(swarm: dict) -> str:
 
 @mcp.tool()
 def list_aps(site: str = "", status: str = "") -> str:
-    """List all access points from Aruba Central.
+    """List access points with device-level overview.
 
-    Returns AP name, status, model, site, IP, firmware, and MAC address.
+    Use this for AP inventory and availability checks. For RF details
+    (channel, utilization, noise floor), use list_radios instead.
 
     Args:
         site: Filter by site name (exact match, server-side). Empty for all.
@@ -238,10 +239,10 @@ def list_switches() -> str:
 
 @mcp.tool()
 def list_clients(ssid: str = "", band: str = "") -> str:
-    """List connected wireless clients from Aruba Central.
+    """List connected wireless clients with connection details.
 
-    Returns client name, MAC, IP, SSID, band, signal strength, AP name,
-    and authentication type.
+    Returns client name, MAC, IP, SSID, band, SNR, connected AP, and auth type.
+    For a single client's full details, use find_client_by_mac instead.
 
     Args:
         ssid: Filter by SSID name (exact match, server-side). Empty for all.
@@ -261,9 +262,10 @@ def list_clients(ssid: str = "", band: str = "") -> str:
 
 @mcp.tool()
 def find_client_by_mac(mac_address: str) -> str:
-    """Find a client (wireless or wired) by MAC address.
+    """Look up a single client by MAC address (wireless or wired).
 
-    Performs a direct lookup using the MAC address.
+    Returns detailed info including OS, manufacturer, VLAN, and connection
+    status. Uses direct API lookup (no full-list scan).
 
     Args:
         mac_address: Client MAC address (e.g. "aa:bb:cc:dd:ee:ff").
@@ -385,9 +387,10 @@ def get_site_summary() -> str:
 
 @mcp.tool()
 def list_radios(site: str = "", band: str = "") -> str:
-    """List all AP radios from Aruba Central.
+    """List AP radios with RF details.
 
-    Returns radio band, status, channel, utilization, noise floor, and TX power.
+    Use this for RF troubleshooting: channel assignment, channel utilization,
+    noise floor, and TX power. Each AP typically has 2-3 radios (one per band).
 
     Args:
         site: Filter by site name (exact match, server-side). Empty for all.
@@ -407,9 +410,10 @@ def list_radios(site: str = "", band: str = "") -> str:
 
 @mcp.tool()
 def list_bssids(site: str = "") -> str:
-    """List all BSSIDs from Aruba Central.
+    """List all BSSIDs (per-radio, per-SSID broadcast identifiers).
 
-    Returns BSSID, WLAN name, band, radio MAC, and AP information.
+    Useful for identifying which radio on which AP is broadcasting a
+    specific SSID. Each AP radio broadcasts one BSSID per WLAN.
 
     Args:
         site: Filter by site name (exact match, server-side). Empty for all.
@@ -428,9 +432,10 @@ def list_bssids(site: str = "") -> str:
 
 @mcp.tool()
 def list_wlans(site_id: str = "", serial_number: str = "") -> str:
-    """List all WLANs from Aruba Central.
+    """List configured WLANs (SSIDs) with security and VLAN settings.
 
-    Returns WLAN name, band, status, security level, and VLAN.
+    Shows each WLAN's name, band, operational status, security level,
+    and VLAN assignment.
 
     Args:
         site_id: Filter by site ID. Empty for all.
@@ -480,14 +485,17 @@ def get_top_aps(
     start_at: str = "",
     end_at: str = "",
 ) -> str:
-    """Get top access points ranked by bandwidth usage.
+    """Get top access points ranked by bandwidth usage over a time range.
+
+    Returns a ranked list of APs sorted by descending bandwidth consumption.
 
     Args:
-        usage_type: Type of usage to rank by: "wireless", "wired", or "total".
+        usage_type: "wireless" (Wi-Fi traffic), "wired" (uplink traffic),
+                    or "total" (wireless + wired combined). Default: "total".
         site_id: Filter by site ID. Empty for all sites.
         limit: Maximum number of APs to return (1-25, default 10).
         start_at: Start time in RFC 3339 format (e.g. "2025-01-01T00:00:00Z").
-                  Defaults to 24 hours ago if omitted.
+                  Max 30 days range. Defaults to 24 hours ago if omitted.
         end_at: End time in RFC 3339 format. Defaults to current time if omitted.
     """
     path_map = {
@@ -535,13 +543,13 @@ def get_ap_throughput(
     start_at: str = "",
     end_at: str = "",
 ) -> str:
-    """Get throughput trend data for a specific access point.
+    """Get throughput trend for a specific AP as a time-series table.
 
-    Returns TX/RX throughput over time (defaults to last 3 hours).
+    Returns timestamped TX/RX throughput in bps. Defaults to last 3 hours.
 
     Args:
-        serial_number: AP serial number.
-        interface_type: Interface type: "WIRELESS", "WIRED", or "LTE".
+        serial_number: AP serial number (use list_aps or get_ap_status to find it).
+        interface_type: "WIRELESS" (Wi-Fi), "WIRED" (Ethernet uplink), or "LTE".
         start_at: Start time in RFC 3339 format. Defaults to 3 hours ago.
         end_at: End time in RFC 3339 format. Defaults to current time.
     """
@@ -582,15 +590,17 @@ def get_clients_trend(
     group_by: str = "TYPE",
     client_type: str = "ALL",
 ) -> str:
-    """Get client count trend over time.
+    """Get client count trend over time, grouped by a chosen dimension.
+
+    Useful for capacity planning and usage pattern analysis.
 
     Args:
         site_id: Filter by site ID. Empty for all.
         site_name: Filter by site name. Empty for all.
         start_at: Start time in RFC 3339 format (max 1 month range).
         end_at: End time in RFC 3339 format.
-        group_by: Group results by: TYPE, ROLE, VLAN, WLAN, RADIO, SECURITY,
-                  or PROTOCOL. Default is TYPE.
+        group_by: Dimension to group by: TYPE, ROLE, VLAN, WLAN, RADIO,
+                  SECURITY, or PROTOCOL. Default is TYPE.
         client_type: Client category: ALL, WIRELESS, or WIRED. Default is ALL.
     """
     client = _get_client()
@@ -674,9 +684,11 @@ def get_client_mobility_trail(
     start_at: str = "",
     end_at: str = "",
 ) -> str:
-    """Get mobility trail (roaming history) for a wireless client.
+    """Get roaming history for a wireless client as a time-series table.
 
-    Shows the sequence of APs a client has connected to over time.
+    Shows which APs the client connected to, when, and on which SSID.
+    Useful for troubleshooting connectivity issues or tracking movement.
+    Defaults to last 3 hours.
 
     Args:
         mac_address: Client MAC address (e.g. "aa:bb:cc:dd:ee:ff").
