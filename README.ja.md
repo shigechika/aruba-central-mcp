@@ -144,6 +144,15 @@ export ARUBA_CENTRAL_CLIENT_SECRET="your-client-secret"
 python3 -m aruba_central_mcp
 ```
 
+### CLI オプション
+
+```bash
+aruba-central-mcp --version   # バージョン表示して終了
+aruba-central-mcp --help      # 使い方と必須環境変数を表示
+aruba-central-mcp --check     # 環境変数と OAuth2 認証を検証して終了
+aruba-central-mcp             # MCP サーバー起動（STDIO、デフォルト）
+```
+
 ## 開発
 
 ```bash

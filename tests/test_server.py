@@ -152,7 +152,7 @@ def mock_client():
                 for cl in self.client_items:
                     if cl.get("macAddress", "").lower() == mac.lower():
                         return cl
-                raise ArubaAPIError(f"404 Not Found: {path}")
+                raise ArubaAPIError(f"404 Not Found: {path}", status_code=404)
             return {}
 
         def close(self):

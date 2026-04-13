@@ -275,7 +275,7 @@ def find_client_by_mac(mac_address: str) -> str:
     try:
         data = client.get(f"{PATH_CLIENTS}/{mac}")
     except ArubaAPIError as e:
-        if "404" in str(e):
+        if e.status_code == 404:
             return f"No client found with MAC address {mac_address}."
         raise
     lines = [f"# Client: {data.get('clientName') or mac}"]
@@ -598,13 +598,29 @@ def get_clients_trend(
         site_id: Filter by site ID. Empty for all.
         site_name: Filter by site name. Empty for all.
         start_at: Start time in RFC 3339 format (max 1 month range).
-        end_at: End time in RFC 3339 format.
-        group_by: Dimension to group by: TYPE, ROLE, VLAN, WLAN, RADIO,
-                  SECURITY, or PROTOCOL. Default is TYPE.
+                  Must not be in the future.
+        end_at: End time in RFC 3339 format. Must not be in the future.
+        group_by: Dimension to group by. Supported values:
+                  - Any client_type: TYPE, ROLE, VLAN
+                  - WIRELESS only: WLAN, RADIO, SECURITY, PROTOCOL
+                  Default is TYPE.
         client_type: Client category: ALL, WIRELESS, or WIRED. Default is ALL.
+                     Must be WIRELESS when group_by is WLAN, RADIO, SECURITY,
+                     or PROTOCOL (the API returns 400 otherwise).
     """
+    group_by_upper = group_by.upper()
+    client_type_upper = client_type.upper()
+
+    wireless_only_groups = {"WLAN", "RADIO", "SECURITY", "PROTOCOL"}
+    if group_by_upper in wireless_only_groups and client_type_upper != "WIRELESS":
+        return (
+            f"Invalid combination: group_by='{group_by}' requires "
+            f"client_type='WIRELESS' (got '{client_type}'). "
+            f"WLAN, RADIO, SECURITY, and PROTOCOL are wireless-only dimensions."
+        )
+
     client = _get_client()
-    params: dict = {"group-by": group_by.upper(), "type": client_type.upper()}
+    params: dict = {"group-by": group_by_upper, "type": client_type_upper}
     if site_id:
         params["site-id"] = site_id
     if site_name:
@@ -618,7 +634,12 @@ def get_clients_trend(
     items = data.get("items", [])
 
     if not items:
-        return "No client trend data available."
+        return (
+            "No client trend data available. "
+            "If this is unexpected, check: (1) start_at/end_at range (≤ 1 month, "
+            "not in future), (2) site_id/site_name filter, "
+            "(3) API entitlement/license for analytics."
+        )
 
     lines = [f"# Client Trend (group_by={group_by}, type={client_type})\n"]
     for point in items:

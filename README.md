@@ -146,6 +146,15 @@ export ARUBA_CENTRAL_CLIENT_SECRET="your-client-secret"
 python3 -m aruba_central_mcp
 ```
 
+### CLI options
+
+```bash
+aruba-central-mcp --version   # Print version and exit
+aruba-central-mcp --help      # Show usage and required environment variables
+aruba-central-mcp --check     # Verify env vars + OAuth2 authentication, then exit
+aruba-central-mcp             # Start the MCP server on STDIO (default)
+```
+
 ## Development
 
 ```bash

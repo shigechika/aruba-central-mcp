@@ -37,6 +37,10 @@ class ArubaAuthError(ArubaClientError):
 class ArubaAPIError(ArubaClientError):
     """API request failure."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class ArubaClient:
     """GreenLake New Central API client.
@@ -111,7 +115,8 @@ class ArubaClient:
             )
             resp.raise_for_status()
         except httpx.HTTPError as e:
-            raise ArubaAPIError(f"API error ({path}): {e}") from e
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            raise ArubaAPIError(f"API error ({path}): {e}", status_code=status) from e
         return resp.json()
 
     def fetch_all(
