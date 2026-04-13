@@ -10,28 +10,37 @@ Exposes access point, switch, and wireless client status to MCP-compatible AI as
 
 ## Features
 
-- **15 tools** for querying Aruba Central infrastructure:
+### Access Points
 
-  **Access Points**
-  - `list_aps` — List all access points (with optional site/status filter)
-  - `list_radios` — List AP radios (channel, utilization, noise floor, TX power)
-  - `list_bssids` — List all BSSIDs
-  - `list_wlans` — List WLANs (SSID, security, VLAN)
-  - `list_swarms` — List AP swarms/clusters
-  - `get_ap_status` — Get detailed status of a specific AP
-  - `get_ap_throughput` — Get AP throughput trend (TX/RX over time)
-  - `get_top_aps` — Top APs by bandwidth usage (wireless/wired/total)
+| Tool | Description |
+|------|-------------|
+| `list_aps` | List all access points (with optional site/status filter) |
+| `list_radios` | List AP radios (channel, utilization, noise floor, TX power) |
+| `list_bssids` | List all BSSIDs |
+| `list_wlans` | List WLANs (SSID, security, VLAN) |
+| `list_swarms` | List AP swarms/clusters |
+| `get_ap_status` | Get detailed status of a specific AP |
+| `get_ap_throughput` | Get AP throughput trend (TX/RX over time) |
+| `get_top_aps` | Top APs by bandwidth usage (wireless/wired/total) |
 
-  **Clients**
-  - `list_clients` — List connected wireless clients (with optional SSID/band filter)
-  - `find_client_by_mac` — Find a client by MAC address (direct API lookup)
-  - `get_clients_trend` — Client count trend over time
-  - `get_top_clients_by_usage` — Top clients by bandwidth usage
-  - `get_client_mobility_trail` — Client roaming history
+### Clients
 
-  **Infrastructure**
-  - `list_switches` — List all switches
-  - `get_site_summary` — Aggregated site-level summary (AP counts, client counts)
+| Tool | Description |
+|------|-------------|
+| `list_clients` | List connected wireless clients (with optional SSID/band filter) |
+| `find_client_by_mac` | Find a client by MAC address (direct API lookup) |
+| `get_clients_trend` | Client count trend over time |
+| `get_top_clients_by_usage` | Top clients by bandwidth usage |
+| `get_client_mobility_trail` | Client roaming history |
+
+### Infrastructure
+
+| Tool | Description |
+|------|-------------|
+| `list_switches` | List all switches |
+| `get_site_summary` | Aggregated site-level summary (AP counts, client counts) |
+
+### Highlights
 
 - **Server-side OData filtering** for efficient queries
 - **OAuth2 Client Credentials** authentication (GreenLake SSO)
@@ -45,24 +54,33 @@ Exposes access point, switch, and wireless client status to MCP-compatible AI as
 - Aruba Central account with API access (GreenLake New Central API)
 - OAuth2 client credentials (client ID and secret)
 
-## Installation
+## Setup
 
 ```bash
+# uv
+uv pip install aruba-central-mcp
+
+# pip
 pip install aruba-central-mcp
 ```
 
-Or with [uv](https://docs.astral.sh/uv/):
+Or run without installing:
 
 ```bash
 uvx aruba-central-mcp
 ```
 
-For development:
+From source:
 
 ```bash
 git clone https://github.com/shigechika/aruba-central-mcp.git
 cd aruba-central-mcp
-pip install -e ".[test]"
+
+# uv
+uv sync
+
+# pip
+pip install -e .
 ```
 
 ## Configuration
@@ -146,18 +164,30 @@ export ARUBA_CENTRAL_CLIENT_SECRET="your-client-secret"
 python3 -m aruba_central_mcp
 ```
 
-### CLI options
+### CLI Options
 
 ```bash
 aruba-central-mcp --version   # Print version and exit
 aruba-central-mcp --help      # Show usage and required environment variables
-aruba-central-mcp --check     # Verify env vars + OAuth2 authentication, then exit
-aruba-central-mcp             # Start the MCP server on STDIO (default)
+aruba-central-mcp --check     # Verify environment variables and OAuth2 authentication, then exit
+aruba-central-mcp             # Start MCP server (STDIO, default)
 ```
+
+With no options, the process runs as an MCP STDIO server (the mode used by MCP clients).
+
+`--check` exit codes: `0` success, `1` config error, `2` auth error.
 
 ## Development
 
 ```bash
+git clone https://github.com/shigechika/aruba-central-mcp.git
+cd aruba-central-mcp
+
+# uv
+uv sync --dev
+uv run pytest -v
+
+# pip
 python3 -m venv .venv
 .venv/bin/pip install -e ".[test]"
 .venv/bin/pytest -v
