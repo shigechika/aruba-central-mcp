@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.4.0...v0.4.1) (2026-05-26)
+
+
+### Bug Fixes
+
+* add GH_REPO env to gh release upload ([#6](https://github.com/shigechika/aruba-central-mcp/issues/6)) ([97e507f](https://github.com/shigechika/aruba-central-mcp/commit/97e507f801f04b99a1c05f7a92e5d5968093b673))
+
 ## [0.4.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.3.0...v0.4.0) (2026-05-26)
 
 
