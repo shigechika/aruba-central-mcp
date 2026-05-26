@@ -11,6 +11,7 @@ from aruba_central_mcp.server import (
     _format_client,
     _format_switch,
     _reset_client,
+    daily_brief,
     find_client_by_mac,
     get_ap_status,
     get_site_summary,
@@ -329,6 +330,77 @@ class TestGetSiteSummary:
         mock_client.client_items = []
         result = get_site_summary()
         assert "No site data" in result
+
+
+class TestDailyBrief:
+    def test_header_format(self, mock_client):
+        """Output starts with daily_brief header and site count line."""
+        result = daily_brief()
+        assert "## daily_brief —" in result
+        assert "sites:" in result
+
+    def test_offline_site_is_warning(self, mock_client):
+        """Site with all APs offline appears in WARNINGS."""
+        # SAMPLE_APS: Sub Campus has 1 AP (OFFLINE) → 100% > 10%
+        result = daily_brief()
+        assert "### WARNINGS" in result
+        assert "Sub Campus" in result
+        assert "AP-OFFLINE" in result
+
+    def test_online_site_is_ok(self, mock_client):
+        """Site with all APs online appears in OK sites."""
+        # SAMPLE_APS: Main Campus has 1 AP (ONLINE) → 0% ≤ 10%
+        result = daily_brief()
+        assert "### OK sites" in result
+        assert "Main Campus" in result
+
+    def test_site_counts_in_header(self, mock_client):
+        """Header reports correct OK/WARNING counts."""
+        result = daily_brief()
+        # Main Campus: OK, Sub Campus: WARNING (1/1 = 100% > 10%)
+        assert "2 sites:" in result
+        assert "1 OK" in result
+        assert "1 WARNING" in result
+
+    def test_all_online_no_warnings(self, mock_client):
+        """When all APs are online, no WARNINGS section appears."""
+        mock_client.ap_items = [
+            {**SAMPLE_APS[0], "siteName": "Site-A"},
+            {**SAMPLE_APS[0], "deviceName": "AP-03", "siteName": "Site-B"},
+        ]
+        result = daily_brief()
+        assert "### WARNINGS" not in result
+        assert "Site-A" in result
+        assert "Site-B" in result
+
+    def test_api_error_returns_critical(self):
+        """API error returns a CRITICAL message."""
+        with patch(
+            "aruba_central_mcp.server._get_client",
+            side_effect=ValueError("Connection failed"),
+        ):
+            result = daily_brief()
+        assert "CRITICAL" in result
+        assert "Connection failed" in result
+
+    def test_no_aps_returns_no_data(self, mock_client):
+        """Empty AP list returns no-data message."""
+        mock_client.ap_items = []
+        result = daily_brief()
+        assert "No AP data available" in result
+
+    def test_high_threshold_suppresses_warning(self, mock_client):
+        """Setting threshold=100 means no site triggers WARNING."""
+        result = daily_brief(offline_threshold=100.0)
+        assert "### WARNINGS" not in result
+        assert "### OK sites" in result
+
+    def test_offline_ratio_shown_in_warning(self, mock_client):
+        """WARNING entry shows offline count and percentage."""
+        result = daily_brief()
+        # Sub Campus: 1/1 = 100%
+        assert "1/1 APs offline" in result
+        assert "100%" in result
 
 
 class TestMissingEnvVars:
