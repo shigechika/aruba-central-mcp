@@ -8,6 +8,7 @@ STDIO transport is used for JSON-RPC communication.
 
 from __future__ import annotations
 
+import datetime
 import os
 from typing import Optional
 
@@ -739,6 +740,102 @@ def get_client_mobility_trail(
         site = event.get("siteName", "")
         ssid = event.get("wlanName", "")
         lines.append(f"| {ts} | {ap} | {site} | {ssid} |")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def daily_brief(offline_threshold: float = 10.0) -> str:
+    """Run a morning AP health check across all sites.
+
+    Fetches all access points and aggregates their online/offline status by
+    site.  Sites whose offline AP ratio is *strictly greater than*
+    ``offline_threshold`` percent are flagged as WARNING (uses ``>``, so a
+    site with exactly ``offline_threshold`` % offline is still OK).
+
+    Args:
+        offline_threshold: Percentage of offline APs that triggers a WARNING
+                           (default 10.0).  Sites at or below this threshold
+                           appear in the OK section.  Pass 0.0 to flag any
+                           site with at least one offline AP.
+
+    Output tiers:
+    - CRITICAL — API connection failure
+    - WARNING  — offline AP ratio strictly above threshold
+    - OK       — offline ratio at or below threshold
+
+    Returns a Markdown summary with site-level AP counts and anomaly details.
+    """
+    now_str = (
+        datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z").strip()
+    )
+
+    try:
+        client = _get_client()
+        ap_items = client.fetch_all(PATH_APS)
+    except Exception as exc:
+        return (
+            f"## daily_brief — {now_str}\n"
+            f"## CRITICAL — API error: {exc}"
+        )
+
+    sites: dict[str, dict] = {}
+    for ap in ap_items:
+        site = ap.get("siteName") or "(no site)"
+        if site not in sites:
+            sites[site] = {"aps": 0, "online": 0, "offline": 0}
+        sites[site]["aps"] += 1
+        if (ap.get("status") or "").upper() == "ONLINE":
+            sites[site]["online"] += 1
+        else:
+            sites[site]["offline"] += 1
+
+    if not sites:
+        return f"## daily_brief — {now_str}\nNo AP data available."
+
+    n_critical = 0
+    warnings: list[dict] = []
+    oks: list[str] = []
+    for site_name in sorted(sites):
+        s = sites[site_name]
+        total = s["aps"]
+        offline = s["offline"]
+        pct = (offline / total * 100) if total > 0 else 0.0
+        if pct > offline_threshold:
+            warnings.append(
+                {
+                    "site": site_name,
+                    "aps": total,
+                    "online": s["online"],
+                    "offline": offline,
+                    "pct": pct,
+                }
+            )
+        else:
+            oks.append(site_name)
+
+    total_sites = len(sites)
+    lines: list[str] = [
+        f"## daily_brief — {now_str}",
+        f"## {total_sites} sites: "
+        f"{len(oks)} OK, {len(warnings)} WARNING, {n_critical} CRITICAL",
+        "",
+    ]
+
+    if warnings:
+        lines.append("### WARNINGS")
+        for row in warnings:
+            lines.append(f"#### {row['site']}")
+            lines.append(
+                f"- [AP-OFFLINE] {row['offline']}/{row['aps']} APs offline "
+                f"({row['pct']:.0f}%)"
+            )
+        lines.append("")
+
+    ok_names = ", ".join(oks)
+    lines.append(f"### OK sites ({len(oks)})")
+    if ok_names:
+        lines.append(ok_names)
+
     return "\n".join(lines)
 
 
