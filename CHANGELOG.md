@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.3.0...v0.4.0) (2026-05-26)
+
+
+### Features
+
+* add daily_brief tool for AP health check by site ([#3](https://github.com/shigechika/aruba-central-mcp/issues/3)) ([b91ed09](https://github.com/shigechika/aruba-central-mcp/commit/b91ed09987e727524a1c312734512f45128ca879))
+
 ## [0.3.0](https://github.com/shigechika/aruba-central-mcp/releases/tag/v0.3.0) - 2026-05-26
 
 ### Features
