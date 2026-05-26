@@ -748,17 +748,19 @@ def daily_brief(offline_threshold: float = 10.0) -> str:
     """Run a morning AP health check across all sites.
 
     Fetches all access points and aggregates their online/offline status by
-    site.  Sites whose offline AP ratio exceeds ``offline_threshold`` percent
-    are flagged as WARNING.
+    site.  Sites whose offline AP ratio is *strictly greater than*
+    ``offline_threshold`` percent are flagged as WARNING (uses ``>``, so a
+    site with exactly ``offline_threshold`` % offline is still OK).
 
     Args:
         offline_threshold: Percentage of offline APs that triggers a WARNING
                            (default 10.0).  Sites at or below this threshold
-                           appear in the OK section.
+                           appear in the OK section.  Pass 0.0 to flag any
+                           site with at least one offline AP.
 
     Output tiers:
     - CRITICAL — API connection failure
-    - WARNING  — offline AP ratio above threshold
+    - WARNING  — offline AP ratio strictly above threshold
     - OK       — offline ratio at or below threshold
 
     Returns a Markdown summary with site-level AP counts and anomaly details.
@@ -776,7 +778,6 @@ def daily_brief(offline_threshold: float = 10.0) -> str:
             f"## CRITICAL — API error: {exc}"
         )
 
-    # Aggregate APs by site
     sites: dict[str, dict] = {}
     for ap in ap_items:
         site = ap.get("siteName") or "(no site)"
@@ -791,6 +792,7 @@ def daily_brief(offline_threshold: float = 10.0) -> str:
     if not sites:
         return f"## daily_brief — {now_str}\nNo AP data available."
 
+    n_critical = 0
     warnings: list[dict] = []
     oks: list[str] = []
     for site_name in sorted(sites):
@@ -815,7 +817,7 @@ def daily_brief(offline_threshold: float = 10.0) -> str:
     lines: list[str] = [
         f"## daily_brief — {now_str}",
         f"## {total_sites} sites: "
-        f"{len(oks)} OK, {len(warnings)} WARNING, 0 CRITICAL",
+        f"{len(oks)} OK, {len(warnings)} WARNING, {n_critical} CRITICAL",
         "",
     ]
 

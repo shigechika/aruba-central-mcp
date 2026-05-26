@@ -373,13 +373,12 @@ class TestDailyBrief:
         assert "Site-A" in result
         assert "Site-B" in result
 
-    def test_api_error_returns_critical(self):
-        """API error returns a CRITICAL message."""
-        with patch(
-            "aruba_central_mcp.server._get_client",
-            side_effect=ValueError("Connection failed"),
-        ):
-            result = daily_brief()
+    def test_api_error_returns_critical(self, mock_client):
+        """fetch_all failure returns a CRITICAL message."""
+        def raise_error(*args, **kwargs):
+            raise RuntimeError("Connection failed")
+        mock_client.fetch_all = raise_error
+        result = daily_brief()
         assert "CRITICAL" in result
         assert "Connection failed" in result
 
