@@ -37,6 +37,7 @@
 |--------|------|
 | `list_switches` | スイッチ一覧 |
 | `get_site_summary` | サイト別集約サマリー（AP 数・クライアント数） |
+| `health_check` | サーバーバージョンの報告と Aruba Central 認証の確認（データ取得なし） |
 
 ### 特徴
 

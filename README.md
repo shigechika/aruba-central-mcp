@@ -39,6 +39,7 @@ Exposes access point, switch, and wireless client status to MCP-compatible AI as
 |------|-------------|
 | `list_switches` | List all switches |
 | `get_site_summary` | Aggregated site-level summary (AP counts, client counts) |
+| `health_check` | Report server version and verify Aruba Central authentication (no data fetch) |
 
 ### Highlights
 

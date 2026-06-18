@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from aruba_central_mcp.client import (
     ArubaAPIError,
     ArubaClient,
+    ArubaClientError,
     PATH_APS,
     PATH_BSSIDS,
     PATH_CLIENTS,
@@ -79,6 +80,54 @@ def _build_odata_filter(**kwargs: str) -> Optional[str]:
         if value
     ]
     return " and ".join(clauses) if clauses else None
+
+
+@mcp.tool()
+def health_check() -> dict:
+    """Report server version and Aruba Central backend authentication.
+
+    Call this at session start (or after a tool-call timeout) to confirm the MCP
+    is up, see which version is running, and verify the Aruba Central backend can
+    be authenticated. Lightweight: it builds the client and obtains an OAuth2
+    access token (GreenLake SSO, reusing the cached token) — it does NOT fetch
+    APs, switches, clients, or any other data endpoint.
+
+    Always returns the same keys: ``status`` (healthy / degraded / error),
+    ``service``, ``version``, ``base_url`` (the configured
+    ARUBA_CENTRAL_BASE_URL, empty string if unset), and ``auth`` (ok / error /
+    missing-env). On a degraded or error result, ``detail`` carries the reason.
+    """
+    from aruba_central_mcp import __version__
+
+    # Fixed shape: every key is present regardless of outcome, so callers can
+    # read it uniformly and rely on `status` to judge health.
+    result: dict = {
+        "status": "healthy",
+        "service": "aruba-central-mcp",
+        "version": __version__,
+        "base_url": os.environ.get("ARUBA_CENTRAL_BASE_URL", ""),
+        "auth": "unknown",
+    }
+
+    # Backend: build the client and obtain an OAuth2 token. Reuse the cached
+    # singleton so this is one cheap round trip (or none if already valid).
+    try:
+        client = _get_client()
+        client._get_token()
+        result["auth"] = "ok"
+    except ValueError as e:
+        # _get_client raises ValueError when required env vars are unset.
+        result["status"] = "error"
+        result["auth"] = "missing-env"
+        result["detail"] = str(e)
+    except ArubaClientError as e:
+        # Token request failed (auth rejected / network / API error).
+        _reset_client()
+        result["status"] = "degraded"
+        result["auth"] = "error"
+        result["detail"] = f"Aruba Central error: {e}"
+
+    return result
 
 
 # -- Format helpers ----------------------------------------------------------
