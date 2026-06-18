@@ -1,10 +1,12 @@
 """Tests for MCP server tools."""
 
+import os
 import re
 from unittest.mock import patch
 
 import pytest
 
+from aruba_central_mcp.client import ArubaAuthError
 from aruba_central_mcp.server import (
     _build_odata_filter,
     _format_ap,
@@ -15,6 +17,7 @@ from aruba_central_mcp.server import (
     find_client_by_mac,
     get_ap_status,
     get_site_summary,
+    health_check,
     list_aps,
     list_clients,
     list_switches,
@@ -407,3 +410,79 @@ class TestMissingEnvVars:
         """Missing env vars raises ValueError."""
         with pytest.raises(ValueError, match="Missing environment variables"):
             list_aps()
+
+
+class TestHealthCheck:
+    EXPECTED_KEYS = {"status", "service", "version", "base_url", "auth"}
+
+    def test_healthy_when_token_obtained(self):
+        """A successful token request reports healthy / auth ok."""
+
+        class TokenClient:
+            def __init__(self):
+                self.token_calls = 0
+
+            def _get_token(self):
+                self.token_calls += 1
+                return "fake-token"
+
+            def close(self):
+                pass
+
+        fake = TokenClient()
+        with patch("aruba_central_mcp.server._get_client", return_value=fake):
+            result = health_check()
+        assert result["status"] == "healthy"
+        assert result["auth"] == "ok"
+        assert result["service"] == "aruba-central-mcp"
+        assert result["version"]  # __version__ is present
+        assert "detail" not in result
+        # Probe obtained a token but did NOT touch any data endpoint.
+        assert fake.token_calls == 1
+
+    def test_always_returns_fixed_keys(self):
+        """Every outcome returns the same fixed-shape key set."""
+
+        class TokenClient:
+            def _get_token(self):
+                return "fake-token"
+
+            def close(self):
+                pass
+
+        with patch("aruba_central_mcp.server._get_client", return_value=TokenClient()):
+            result = health_check()
+        assert self.EXPECTED_KEYS <= set(result)
+
+    def test_missing_env(self):
+        """Missing env vars → status error, auth missing-env, with detail."""
+        # Clear the credentials so _get_client raises ValueError (missing-env),
+        # independent of whatever is set in the runner's environment.
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith("ARUBA_CENTRAL_")
+        }
+        with patch.dict(os.environ, env, clear=True):
+            result = health_check()
+        assert result["status"] == "error"
+        assert result["auth"] == "missing-env"
+        assert "detail" in result
+        assert self.EXPECTED_KEYS <= set(result)
+
+    def test_backend_error(self):
+        """A token failure → status degraded, auth error, with detail."""
+
+        class FailingClient:
+            def _get_token(self):
+                raise ArubaAuthError("OAuth2 authentication failed: 401")
+
+            def close(self):
+                pass
+
+        with patch("aruba_central_mcp.server._get_client", return_value=FailingClient()):
+            result = health_check()
+        assert result["status"] == "degraded"
+        assert result["auth"] == "error"
+        assert "detail" in result
+        assert self.EXPECTED_KEYS <= set(result)
