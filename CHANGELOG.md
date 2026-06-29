@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.4.1...v0.5.0) (2026-06-18)
+
+
+### Features
+
+* add health_check MCP tool ([#8](https://github.com/shigechika/aruba-central-mcp/issues/8)) ([ecabc58](https://github.com/shigechika/aruba-central-mcp/commit/ecabc5838388604eb7169ff42cb705f8750743bb))
+
 ## [0.4.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.4.0...v0.4.1) (2026-05-26)
 
 
