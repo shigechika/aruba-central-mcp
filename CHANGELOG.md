@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.0...v0.5.1) (2026-07-06)
+
+
+### Documentation
+
+* add repository custom instructions for Copilot code review ([#11](https://github.com/shigechika/aruba-central-mcp/issues/11)) ([64a88df](https://github.com/shigechika/aruba-central-mcp/commit/64a88df7e597b57f403be9f55426e655c69fea2c))
+
 ## [0.5.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.4.1...v0.5.0) (2026-06-18)
 
 
