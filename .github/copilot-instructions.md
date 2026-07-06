@@ -1,0 +1,111 @@
+# Repository overview
+
+`aruba-central-mcp` is an MCP (Model Context Protocol) server exposing Aruba
+Central (GreenLake New Central API) data — APs, switches, wireless clients —
+to AI assistants over **stdio transport**. Built on the official `mcp` Python
+SDK's `FastMCP` (`aruba_central_mcp/server.py`), with `ArubaClient`
+(`aruba_central_mcp/client.py`) handling OAuth2 Client Credentials auth,
+`httpx`, and automatic pagination.
+
+See `CLAUDE.md` for the authoritative command list and architecture notes —
+read it before reviewing changes to `client.py` or `server.py`.
+
+# Build & validate
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[test]"
+.venv/bin/pytest -v                        # all tests
+.venv/bin/pytest -v tests/test_client.py   # client tests only
+.venv/bin/pytest -v tests/test_server.py   # server tests only
+python3 -m py_compile aruba_central_mcp/client.py   # syntax check
+```
+
+This mirrors `.github/workflows/test.yml` (`pip install -e ".[test]"` +
+`pytest tests/ -v`, matrix over Python 3.10–3.14, plus one Windows job
+specifically to catch stdio newline regressions —
+see `modelcontextprotocol/python-sdk#2433`). There is no lint/format job in
+CI; don't invent style nits `ruff`/`black` would catch, because neither runs
+here.
+
+# What to focus review on in this repo
+
+## 1. This is a stdio MCP server — stdout is a JSON-RPC channel, not a log
+
+Any `print()` or library logging that writes to stdout (instead of stderr)
+corrupts the protocol stream for the connected client. Flag any new code
+path that writes to stdout directly, uses a logger without an explicit
+stderr handler, or lets a dependency's default logging config leak through.
+This exact bug class is why CI runs a dedicated Windows job (stdio newline
+handling is platform-sensitive) — treat it as a real, previously-hit failure
+mode, not a theoretical one.
+
+## 2. FastMCP already wraps tool returns — don't ask for manual envelope code
+
+`server.py`'s `@mcp.tool()`-decorated functions can return plain Python
+values/dicts; FastMCP handles the MCP content-envelope wrapping and derives
+`isError` from raised exceptions. Do **not** suggest that a tool handler
+manually construct `{"content": [...], "isError": ...}` — that's a
+hand-rolled-stdio-server pattern (relevant in other repos in this family,
+not this one) and would be redundant/wrong here. The existing convention,
+per `server.py`, is: let unexpected exceptions propagate (`raise`) so
+FastMCP turns them into an MCP error; only convert to a plain string/dict
+return for a specific, anticipated condition the caller should see as a
+normal result rather than a tool failure (e.g. `get_client_by_mac` catching
+a 404 `ArubaAPIError` and returning "No client found..." instead of
+raising). A new tool that catches a broad `except Exception` and returns
+`None`/an empty result *without* re-raising or producing a visible error
+message is swallowing a real failure — flag it. (`daily_brief`'s broad
+except-and-report-in-the-output pattern is a deliberate exception for a
+summary tool that should still return partial output on API failure, not a
+precedent to copy elsewhere.)
+
+## 3. OAuth2 credentials and API responses are the sensitive surface
+
+- `ARUBA_CENTRAL_CLIENT_ID` / `ARUBA_CENTRAL_CLIENT_SECRET` /
+  `ARUBA_CENTRAL_BASE_URL` are read from the environment. Flag any diff that
+  logs a request/response containing the `Authorization` header, the client
+  secret, or a raw access token — including at `DEBUG` log level.
+  `ArubaClient`'s token refresh path is the highest-risk spot for this.
+- Tool inputs (MAC addresses, site/AP names, filters) come from an LLM
+  acting on a user's behalf — treat them as adversarial. Check that values
+  interpolated into API query parameters go through `httpx`'s params
+  handling (not manual string formatting into a URL).
+- A new `@mcp.tool()`'s name and docstring are what the calling model uses
+  to decide whether/how to invoke it — flag a vague name (`get_data`) or a
+  docstring that omits parameter formats an LLM would otherwise have to
+  guess (e.g. the MAC address format `client.py` expects).
+
+## 4. Python 3.10 compatibility is a hard constraint, not a style preference
+
+Per `CLAUDE.md`: no `X | Y` union syntax in runtime code (only inside
+`from __future__ import annotations`-guarded type hints). Flag a diff that
+introduces bare `X | Y` in a function signature or variable annotation
+without confirming `from __future__ import annotations` is present at the
+top of that file — this is a real runtime `TypeError` on 3.10, not a lint
+nit, since the CI matrix starts at 3.10.
+
+## 5. Test conventions
+
+- HTTP-level tests mock via `respx` (not `unittest.mock` for the HTTP
+  layer); server-level/tool-dispatch tests use `unittest.mock`. A new
+  `client.py` test that hand-mocks `httpx` calls instead of using `respx`
+  is inconsistent with the existing suite — flag it.
+- New tools need a test exercising both a successful API response and at
+  least one error/edge case (empty result set, pagination boundary, 4xx
+  from the API). Pagination specifically has a real history of silent bugs
+  in this codebase — three separate fixes (offset→cursor-based pagination,
+  stopping on a duplicate page instead of looping forever, deduplicating
+  items across page boundaries) all landed after the original
+  happy-path-only implementation shipped. Any new or modified call to
+  `client.fetch_all`/pagination logic needs a test covering a multi-page
+  response, not just a single page.
+
+# Out of scope for review comments
+
+- Formatting/style nits: there is no `ruff`/`black`/`mypy` step in CI for
+  this repo, so don't hold this repo to a style standard it hasn't opted
+  into.
+- `release-please.yml`'s use of `secrets.RELEASE_PLEASE_TOKEN` instead of
+  `GITHUB_TOKEN` is intentional (`GITHUB_TOKEN`-authored tags/releases don't
+  trigger downstream workflows) — don't suggest reverting it.
