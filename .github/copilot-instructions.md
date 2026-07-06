@@ -51,7 +51,7 @@ not this one) and would be redundant/wrong here. The existing convention,
 per `server.py`, is: let unexpected exceptions propagate (`raise`) so
 FastMCP turns them into an MCP error; only convert to a plain string/dict
 return for a specific, anticipated condition the caller should see as a
-normal result rather than a tool failure (e.g. `get_client_by_mac` catching
+normal result rather than a tool failure (e.g. `find_client_by_mac` catching
 a 404 `ArubaAPIError` and returning "No client found..." instead of
 raising). A new tool that catches a broad `except Exception` and returns
 `None`/an empty result *without* re-raising or producing a visible error
@@ -76,14 +76,14 @@ precedent to copy elsewhere.)
   docstring that omits parameter formats an LLM would otherwise have to
   guess (e.g. the MAC address format `client.py` expects).
 
-## 4. Python 3.10 compatibility is a hard constraint, not a style preference
+## 4. Python 3.10 compatibility is a project convention, follow it as written
 
-Per `CLAUDE.md`: no `X | Y` union syntax in runtime code (only inside
-`from __future__ import annotations`-guarded type hints). Flag a diff that
-introduces bare `X | Y` in a function signature or variable annotation
-without confirming `from __future__ import annotations` is present at the
-top of that file — this is a real runtime `TypeError` on 3.10, not a lint
-nit, since the CI matrix starts at 3.10.
+Per `CLAUDE.md`: no `X | Y` union syntax in runtime code; every file uses
+`from __future__ import annotations` instead. (PEP 604 union syntax itself
+runs fine on 3.10+ without the import — this rule is this codebase's own
+consistency convention, not a runtime-error workaround, so don't invent a
+`TypeError` justification when reviewing against it.) Flag a diff that adds
+a bare `X | Y` annotation inconsistent with the rest of the file.
 
 ## 5. Test conventions
 
@@ -93,13 +93,13 @@ nit, since the CI matrix starts at 3.10.
   is inconsistent with the existing suite — flag it.
 - New tools need a test exercising both a successful API response and at
   least one error/edge case (empty result set, pagination boundary, 4xx
-  from the API). Pagination specifically has a real history of silent bugs
-  in this codebase — three separate fixes (offset→cursor-based pagination,
-  stopping on a duplicate page instead of looping forever, deduplicating
-  items across page boundaries) all landed after the original
-  happy-path-only implementation shipped. Any new or modified call to
-  `client.fetch_all`/pagination logic needs a test covering a multi-page
-  response, not just a single page.
+  from the API). `client.fetch_all` (cursor-based: follows the `next` field,
+  stops when `next` is absent, the page is empty, or `total` is reached) has
+  a real history of pagination bugs in this codebase — the offset-based
+  approach it replaced was buggy enough to need multiple fixes. Any new or
+  modified call to `fetch_all` needs a test covering a multi-page response
+  (not just a single page), verified against the actual stop conditions in
+  the current implementation, not assumed ones.
 
 # Out of scope for review comments
 
