@@ -4,4 +4,4 @@ Exposes Aruba Central AP, switch, and wireless client status to
 MCP-compatible AI assistants via STDIO transport.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
