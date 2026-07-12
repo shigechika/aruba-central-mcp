@@ -19,6 +19,7 @@ from aruba_central_mcp.server import (
     daily_brief,
     find_client_by_mac,
     get_ap_status,
+    get_ap_throughput,
     get_site_summary,
     health_check,
     list_aps,
@@ -218,6 +219,12 @@ class TestInputValidation:
             with pytest.raises(ArubaClientError):
                 _safe_mac(bad)
 
+    def test_safe_mac_rejects_malformed(self):
+        # Structurally invalid even though every char is in the hex/colon set.
+        for bad in [":", "::::", "aabb", "aa:bb:cc:dd:ee", "aabbccddeeffgg"]:
+            with pytest.raises(ArubaClientError):
+                _safe_mac(bad)
+
     def test_safe_serial_accepts_and_rejects(self):
         assert _safe_serial("CN12345ABC") == "CN12345ABC"
         assert _safe_serial("SN-01_A.2") == "SN-01_A.2"
@@ -332,6 +339,18 @@ class TestFindClientByMac:
         """MAC with dashes is converted to colons."""
         result = find_client_by_mac("ff-ee-dd-cc-bb-aa")
         assert "iPhone" in result
+
+    def test_rejects_invalid_mac(self, mock_client):
+        """The tool validates the MAC before building the request path."""
+        with pytest.raises(ArubaClientError):
+            find_client_by_mac("aa:bb/../secret")
+
+
+class TestGetApThroughput:
+    def test_rejects_invalid_serial(self, mock_client):
+        """The tool validates the AP serial before building the request path."""
+        with pytest.raises(ArubaClientError):
+            get_ap_throughput("SN/../secret")
 
 
 class TestGetApStatus:

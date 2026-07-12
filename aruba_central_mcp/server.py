@@ -69,8 +69,11 @@ def _reset_client() -> None:
     _client = None
 
 
-_MAC_RE = re.compile(r"^[0-9a-f:]+$")
-_SERIAL_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+# A MAC is 12 hex digits, or 6 colon-separated hex octets (dashes are
+# normalised to colons first). A charset-only check would wrongly accept
+# structurally-invalid values like ":" or "::::".
+_MAC_RE = re.compile(r"[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
+_SERIAL_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 
 def _odata_literal(value: str) -> str:
@@ -90,14 +93,14 @@ def _safe_mac(mac_address: str) -> str:
     new path segment or query string. Raises ``ArubaClientError`` on a bad value.
     """
     mac = mac_address.lower().replace("-", ":")
-    if not _MAC_RE.match(mac):
+    if not _MAC_RE.fullmatch(mac):
         raise ArubaClientError(f"invalid MAC address: {mac_address!r}")
     return mac
 
 
 def _safe_serial(serial: str) -> str:
     """Validate an AP serial before it goes into a URL path segment."""
-    if not _SERIAL_RE.match(serial):
+    if not _SERIAL_RE.fullmatch(serial):
         raise ArubaClientError(f"invalid serial number: {serial!r}")
     return serial
 
