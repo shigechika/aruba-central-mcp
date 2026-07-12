@@ -19,7 +19,8 @@ python3 -m py_compile aruba_central_mcp/client.py  # syntax check
 ## Architecture
 
 - `aruba_central_mcp/client.py` — `ArubaClient`: OAuth2 Client Credentials + httpx + automatic pagination
-- `aruba_central_mcp/server.py` — FastMCP server with 15 tools: AP tools (list_aps, list_radios, list_bssids, list_wlans, list_swarms, get_ap_status, get_ap_throughput, get_top_aps), Client tools (list_clients, find_client_by_mac, get_clients_trend, get_top_clients_by_usage, get_client_mobility_trail), Infrastructure (list_switches, get_site_summary)
+- `aruba_central_mcp/server.py` — FastMCP server with 17 tools: AP tools (list_aps, list_radios, list_bssids, list_wlans, list_swarms, get_ap_status, get_ap_throughput, get_top_aps), Client tools (list_clients, find_client_by_mac, get_clients_trend, get_top_clients_by_usage, get_client_mobility_trail), Infrastructure (list_switches, get_site_summary), plus health_check (server version + backend auth probe) and daily_brief (site-level AP online/offline health summary; buckets APs by siteName, threshold-gated)
+- `aruba_central_mcp/__main__.py` — console-script entry point (`aruba-central-mcp`, per `pyproject.toml`); `--check` verifies env vars + OAuth2 auth and exits; its `KeyboardInterrupt` handler calls `os._exit(0)` deliberately to bypass normal interpreter shutdown, because FastMCP's stdio reader daemon thread can crash with `_enter_buffered_busy` on Python 3.14
 - Environment variables for configuration: `ARUBA_CENTRAL_BASE_URL`, `ARUBA_CENTRAL_CLIENT_ID`, `ARUBA_CENTRAL_CLIENT_SECRET`
 
 ## Conventions
