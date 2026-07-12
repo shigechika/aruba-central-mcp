@@ -232,6 +232,12 @@ class TestInputValidation:
             with pytest.raises(ArubaClientError):
                 _safe_serial(bad)
 
+    def test_safe_serial_rejects_traversal_tokens(self):
+        # A bare "." / ".." would inject a path-traversal segment into the URL.
+        for bad in [".", "..", "...", "-", "_", ".hidden"]:
+            with pytest.raises(ArubaClientError):
+                _safe_serial(bad)
+
 
 class TestFormatFunctions:
     def test_format_ap(self):

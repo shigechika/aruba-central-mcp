@@ -73,7 +73,9 @@ def _reset_client() -> None:
 # normalised to colons first). A charset-only check would wrongly accept
 # structurally-invalid values like ":" or "::::".
 _MAC_RE = re.compile(r"[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
-_SERIAL_RE = re.compile(r"[A-Za-z0-9._-]+")
+# Must start with an alphanumeric so a bare "." / ".." (a path-traversal
+# segment) is rejected — a serial goes straight into a URL path segment.
+_SERIAL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def _odata_literal(value: str) -> str:
