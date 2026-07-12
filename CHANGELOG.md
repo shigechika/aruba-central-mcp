@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.1...v0.5.2) (2026-07-12)
+
+
+### Documentation
+
+* correct tool count and document __main__.py + interpolation surface ([#16](https://github.com/shigechika/aruba-central-mcp/issues/16)) ([4a90bb7](https://github.com/shigechika/aruba-central-mcp/commit/4a90bb7f1484d98c9581431ee5c0f037d49fb72c))
+
 ## [0.5.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.0...v0.5.1) (2026-07-06)
 
 
