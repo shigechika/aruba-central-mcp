@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.2...v0.5.3) (2026-07-12)
+
+
+### Bug Fixes
+
+* escape OData literals and validate MAC/serial path segments ([#21](https://github.com/shigechika/aruba-central-mcp/issues/21)) ([911e202](https://github.com/shigechika/aruba-central-mcp/commit/911e20282c782adc34769a7ad94611a26ae0d442))
+
 ## [0.5.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.1...v0.5.2) (2026-07-12)
 
 
