@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -68,6 +69,44 @@ def _reset_client() -> None:
     _client = None
 
 
+# A MAC is 12 hex digits, or 6 colon-separated hex octets (dashes are
+# normalised to colons first). A charset-only check would wrongly accept
+# structurally-invalid values like ":" or "::::".
+_MAC_RE = re.compile(r"[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2}")
+# Must start with an alphanumeric so a bare "." / ".." (a path-traversal
+# segment) is rejected — a serial goes straight into a URL path segment.
+_SERIAL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def _odata_literal(value: str) -> str:
+    """Escape a value for an OData v4 single-quoted string literal.
+
+    A single quote terminates the literal, so it must be doubled; otherwise an
+    LLM-supplied filter value (site/SSID name, timestamp) could alter the
+    filter expression.
+    """
+    return value.replace("'", "''")
+
+
+def _safe_mac(mac_address: str) -> str:
+    """Normalise a MAC and validate it before it goes into a URL path segment.
+
+    Rejects anything outside hex/colon so an LLM-supplied value cannot inject a
+    new path segment or query string. Raises ``ArubaClientError`` on a bad value.
+    """
+    mac = mac_address.lower().replace("-", ":")
+    if not _MAC_RE.fullmatch(mac):
+        raise ArubaClientError(f"invalid MAC address: {mac_address!r}")
+    return mac
+
+
+def _safe_serial(serial: str) -> str:
+    """Validate an AP serial before it goes into a URL path segment."""
+    if not _SERIAL_RE.fullmatch(serial):
+        raise ArubaClientError(f"invalid serial number: {serial!r}")
+    return serial
+
+
 def _build_odata_filter(**kwargs: str) -> Optional[str]:
     """Build an OData v4.0 filter string from keyword arguments.
 
@@ -75,7 +114,7 @@ def _build_odata_filter(**kwargs: str) -> Optional[str]:
     Returns None if no filters apply.
     """
     clauses = [
-        f"{field} eq '{value}'"
+        f"{field} eq '{_odata_literal(value)}'"
         for field, value in kwargs.items()
         if value
     ]
@@ -321,7 +360,7 @@ def find_client_by_mac(mac_address: str) -> str:
         mac_address: Client MAC address (e.g. "aa:bb:cc:dd:ee:ff").
     """
     client = _get_client()
-    mac = mac_address.lower().replace("-", ":")
+    mac = _safe_mac(mac_address)
     try:
         data = client.get(f"{PATH_CLIENTS}/{mac}")
     except ArubaAPIError as e:
@@ -604,13 +643,13 @@ def get_ap_throughput(
         end_at: End time in RFC 3339 format. Defaults to current time.
     """
     client = _get_client()
-    path = f"{PATH_APS}/{serial_number}/throughput-trends"
+    path = f"{PATH_APS}/{_safe_serial(serial_number)}/throughput-trends"
     params: dict = {"interface-type": interface_type.upper()}
     filters = []
     if start_at:
-        filters.append(f"timestamp gt '{start_at}'")
+        filters.append(f"timestamp gt '{_odata_literal(start_at)}'")
     if end_at:
-        filters.append(f"timestamp lt '{end_at}'")
+        filters.append(f"timestamp lt '{_odata_literal(end_at)}'")
     if filters:
         params["filter"] = " and ".join(filters)
 
@@ -767,7 +806,7 @@ def get_client_mobility_trail(
         end_at: End time in RFC 3339 format. Defaults to current time.
     """
     client = _get_client()
-    mac = mac_address.lower().replace("-", ":")
+    mac = _safe_mac(mac_address)
     path = f"{PATH_CLIENTS}/{mac}/mobility-trail"
     params: dict = {}
     if start_at:
