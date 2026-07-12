@@ -8,7 +8,8 @@ SDK's `FastMCP` (`aruba_central_mcp/server.py`), with `ArubaClient`
 `httpx`, and automatic pagination.
 
 See `CLAUDE.md` for the authoritative command list and architecture notes —
-read it before reviewing changes to `client.py` or `server.py`.
+read it before reviewing changes to `client.py`, `server.py`, or
+`__main__.py`.
 
 # Build & validate
 
@@ -70,7 +71,16 @@ precedent to copy elsewhere.)
 - Tool inputs (MAC addresses, site/AP names, filters) come from an LLM
   acting on a user's behalf — treat them as adversarial. Check that values
   interpolated into API query parameters go through `httpx`'s params
-  handling (not manual string formatting into a URL).
+  handling (not manual string formatting into a URL). Note the current code
+  only does this for the `params` dict: `_build_odata_filter` builds
+  `f"{field} eq '{value}'"` with the single quotes unescaped (`server.py`),
+  and `find_client_by_mac`, `get_ap_throughput`, and
+  `get_client_mobility_trail` interpolate the MAC/serial straight into the
+  URL path (`f"{PATH_CLIENTS}/{mac}"`), with `get_ap_throughput` also
+  inlining `start_at`/`end_at` into the filter string. Treat that as the
+  existing (unescaped) surface, not adherence — an unescaped quote in a
+  `site`/`ssid` value alters the OData filter, path segments are
+  unvalidated, and a new tool copying `_build_odata_filter` inherits this.
 - A new `@mcp.tool()`'s name and docstring are what the calling model uses
   to decide whether/how to invoke it — flag a vague name (`get_data`) or a
   docstring that omits parameter formats an LLM would otherwise have to
@@ -78,7 +88,8 @@ precedent to copy elsewhere.)
 
 ## 4. Python 3.10 compatibility is a project convention, follow it as written
 
-Per `CLAUDE.md`: no `X | Y` union syntax in runtime code; every file uses
+Per `CLAUDE.md`: no `X | Y` union syntax in runtime code; every runtime
+module (`server.py`, `client.py`, `__main__.py`) uses
 `from __future__ import annotations` instead. (PEP 604 union syntax itself
 runs fine on 3.10+ without the import — this rule is this codebase's own
 consistency convention, not a runtime-error workaround, so don't invent a
@@ -100,6 +111,16 @@ a bare `X | Y` annotation inconsistent with the rest of the file.
   modified call to `fetch_all` needs a test covering a multi-page response
   (not just a single page), verified against the actual stop conditions in
   the current implementation, not assumed ones.
+
+## 6. `__main__.py` shuts down via `os._exit(0)` on purpose
+
+The console-script entry point (`aruba-central-mcp`; also `--check`, which
+verifies env vars + OAuth2 auth and exits) catches `KeyboardInterrupt` and
+calls `os._exit(0)` instead of a graceful shutdown: FastMCP's stdio reader
+runs in a daemon thread blocked on `sys.stdin`, and joining it at interpreter
+shutdown can crash with `_enter_buffered_busy` on Python 3.14 (which the CI
+matrix covers). Flag a cleanup diff that "fixes" this into `sys.exit(0)` or a
+graceful join — it reintroduces a real, CI-caught crash.
 
 # Out of scope for review comments
 
