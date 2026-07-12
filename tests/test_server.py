@@ -6,13 +6,16 @@ from unittest.mock import patch
 
 import pytest
 
-from aruba_central_mcp.client import ArubaAuthError
+from aruba_central_mcp.client import ArubaAuthError, ArubaClientError
 from aruba_central_mcp.server import (
     _build_odata_filter,
     _format_ap,
     _format_client,
     _format_switch,
+    _odata_literal,
     _reset_client,
+    _safe_mac,
+    _safe_serial,
     daily_brief,
     find_client_by_mac,
     get_ap_status,
@@ -189,6 +192,38 @@ class TestBuildOdataFilter:
         """All empty values returns None."""
         result = _build_odata_filter(siteName="", status="")
         assert result is None
+
+    def test_single_quote_is_escaped(self):
+        """A value with a single quote is escaped (doubled), not injected."""
+        result = _build_odata_filter(siteName="O'Hare")
+        assert result == "siteName eq 'O''Hare'"
+
+    def test_injection_attempt_stays_inside_literal(self):
+        """An OData-injection attempt is neutralised by quote-doubling."""
+        result = _build_odata_filter(siteName="x' or '1'='1")
+        assert result == "siteName eq 'x'' or ''1''=''1'"
+
+
+class TestInputValidation:
+    def test_odata_literal_doubles_quotes(self):
+        assert _odata_literal("a'b'c") == "a''b''c"
+        assert _odata_literal("plain") == "plain"
+
+    def test_safe_mac_normalises_and_accepts(self):
+        assert _safe_mac("AA-BB-CC-DD-EE-FF") == "aa:bb:cc:dd:ee:ff"
+        assert _safe_mac("aabbccddeeff") == "aabbccddeeff"
+
+    def test_safe_mac_rejects_path_injection(self):
+        for bad in ["aa:bb/../secret", "aa:bb:cc?x=1", "aa'bb", "aa bb"]:
+            with pytest.raises(ArubaClientError):
+                _safe_mac(bad)
+
+    def test_safe_serial_accepts_and_rejects(self):
+        assert _safe_serial("CN12345ABC") == "CN12345ABC"
+        assert _safe_serial("SN-01_A.2") == "SN-01_A.2"
+        for bad in ["SN/../x", "SN 1", "SN'x", "SN?y=1"]:
+            with pytest.raises(ArubaClientError):
+                _safe_serial(bad)
 
 
 class TestFormatFunctions:
