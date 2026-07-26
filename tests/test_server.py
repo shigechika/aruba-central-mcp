@@ -20,6 +20,7 @@ from aruba_central_mcp.server import (
     find_client_by_mac,
     get_ap_status,
     get_ap_throughput,
+    get_client_mobility_trail,
     get_site_summary,
     health_check,
     list_aps,
@@ -546,3 +547,34 @@ class TestHealthCheck:
         assert result["auth"] == "error"
         assert "detail" in result
         assert self.EXPECTED_KEYS <= set(result)
+
+
+class TestMobilityTrailPageSize:
+    """The mobility-trail endpoint caps its page size where the listings do not.
+
+    Central answers 400 ("The limit value was either less than 1 or greater
+    than the maximum") to ``fetch_all``'s default of 1000, which made every
+    call to this tool fail against the live API; 100 is the highest value it
+    accepts. Asserting the value here, rather than trusting the call site to
+    stay correct, is the only way a unit test can catch a regression that only
+    shows up as a 400 from a server it never talks to.
+    """
+
+    def test_requests_a_page_size_the_endpoint_accepts(self):
+        recorded = {}
+
+        class RecordingClient:
+            def fetch_all(self, path, limit=1000, params=None):
+                recorded["limit"] = limit
+                return []
+
+            def close(self):
+                pass
+
+        with patch("aruba_central_mcp.server._get_client", return_value=RecordingClient()):
+            get_client_mobility_trail("aa:bb:cc:dd:ee:01")
+
+        assert recorded["limit"] == 100, (
+            f"mobility-trail was requested with limit={recorded['limit']}; the "
+            "endpoint rejects anything above 100 with a 400."
+        )
