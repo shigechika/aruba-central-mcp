@@ -70,8 +70,12 @@ async def _first_client_mac(call: Caller) -> dict[str, Any]:
     return {"mac_address": mac}
 
 
-#: Every tool renders its backend failures as ordinary text rather than
-#: raising, so a probe has to say that none of those sentences may appear.
+#: Sentences a tool prints instead of answering. Most tools here do NOT render
+#: their failures: an API error raises ArubaAPIError and the harness reports the
+#: exception, so this guard is inert for them and kept only so a tool that
+#: starts rendering errors is covered from the day it does. The two that
+#: genuinely answer with text on failure are find_client_by_mac (its "not
+#: found" branch) and daily_brief, which are guarded by name below.
 NO_ERROR = (r"^(Error|Failed|Missing environment variable|Invalid)",)
 
 
@@ -164,10 +168,14 @@ PROBES: dict[str, Probe] = {
         must_not_match=NO_ERROR,
     ),
     # -- morning patrol ------------------------------------------------------
+    # The one tool here that swallows every backend failure into an answer:
+    # it catches Exception and returns its own header followed by "## CRITICAL
+    # — API error: ...". That still satisfies a header assertion, so a dead
+    # backend read as a healthy brief until this line existed.
     "daily_brief": Probe(
         args={"offline_threshold": 10.0},
         must_match=(r"^## daily_brief — ",),
-        must_not_match=NO_ERROR,
+        must_not_match=(*NO_ERROR, r"^## CRITICAL — API error:"),
         timeout=300,
     ),
 }
