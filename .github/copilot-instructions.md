@@ -112,6 +112,17 @@ a bare `X | Y` annotation inconsistent with the rest of the file.
   (not just a single page), verified against the actual stop conditions in
   the current implementation, not assumed ones.
 
+- `tests/test_smoke_probes.py` guards `scripts/smoke_test.py`, which
+  exercises every registered tool against a real tenant. It asserts what
+  can be checked without one: every registered tool has a probe spec, no
+  spec targets a removed tool, state-changing tools stay skipped, and no
+  network-specific literal (AP name, serial, MAC, site, SSID) is written
+  into the specs — this repository is public. A new tool therefore needs
+  an entry in `scripts/smoke_probes.py` or CI fails; that is deliberate,
+  not an obstacle to route around. Its first run found a real defect the
+  mocked suite could not see (a page size the endpoint rejects), which is
+  the kind of gap it exists to close.
+
 ## 6. `__main__.py` shuts down via `os._exit(0)` on purpose
 
 The console-script entry point (`aruba-central-mcp`; also `--check`, which

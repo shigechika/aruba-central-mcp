@@ -194,6 +194,43 @@ python3 -m venv .venv
 .venv/bin/pytest -v
 ```
 
+### Live smoke test
+
+The unit suite mocks Central at the transport layer, which is what makes it
+fast — and also what makes it blind to a tool that has stopped returning real
+data. `scripts/smoke_test.py` runs **every registered tool** against the
+configured tenant and fails on empty, malformed or error answers:
+
+```bash
+# needs the same ARUBA_CENTRAL_* environment variables as the server
+uv run python scripts/smoke_test.py
+uv run python scripts/smoke_test.py --only radios --traceback
+```
+
+- **Read-only.** Every tool here reads; nothing in Central is configured. A
+  future tool that writes must be listed as state-changing and skipped, and a
+  test enforces that.
+- **No payloads in the report.** Tool names, statuses and row counts only;
+  error text is redacted too, since an error routinely quotes the device,
+  client MAC or site it was asked about.
+- **Nothing network-specific in the specs.** The AP, the serial number and the
+  client MAC that the per-device tools need are discovered at run time from the
+  listings, and skipped when the network has none to offer. Two tests keep it
+  that way: one refuses those parameters as literals, the other bans anything
+  address-shaped anywhere in the file, because this repository is public.
+- Empty answers pass for the listings and the time-series tools — a site with
+  no swarms configured is a real deployment — but a *lookup* handed a name
+  discovered seconds earlier must not come back empty, and those probes say so.
+- CI enforces the cheap half: a tool registered without a probe spec fails the
+  build (`tests/test_smoke_probes.py`), so adding a tool forces the question
+  "how would we know it works?".
+- `scripts/smoke_harness.py` is the engine and holds no Central knowledge: it
+  is kept identical across the servers that share it, so fix engine bugs once
+  and sync the file rather than patching this copy.
+
+Its first run found a real one: `get_client_mobility_trail` was requesting a
+page size the endpoint rejects, so the tool had been failing for every client.
+
 ## API Reference
 
 This server uses the [GreenLake New Central API](https://developer.arubanetworks.com/):
