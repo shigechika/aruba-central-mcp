@@ -29,3 +29,13 @@ python3 -m py_compile aruba_central_mcp/client.py  # syntax check
 - Docstrings in English
 - Python 3.10+ compatible (no `X | Y` union syntax in runtime code; use `from __future__ import annotations`)
 - Tests use `respx` for HTTP mocking and `unittest.mock` for server-level mocking
+- `scripts/` holds the live smoke test: `smoke_test.py` (CLI), its per-tool
+  specs in `smoke_probes.py`, and `smoke_harness.py` — the server-agnostic
+  engine, kept identical across the servers that share it, so fix engine bugs
+  once and sync the file rather than patching this copy. It runs every
+  registered tool against a real tenant (see README);
+  `tests/test_smoke_probes.py` is the offline half and needs only the tool
+  registry. Adding a tool without a probe spec fails CI: decide when you add
+  the tool how anyone would know it works. Probes stay read-only and name no
+  network-specific value — the AP name, serial and client MAC come from an
+  `args_factory` that reads the listings at run time.
