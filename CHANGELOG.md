@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.0...v0.6.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* refuse the answer daily_brief gives when the backend is dead ([#34](https://github.com/shigechika/aruba-central-mcp/issues/34)) ([afb8214](https://github.com/shigechika/aruba-central-mcp/commit/afb8214e161c5d0c8910154e14e3653152c3460b))
+
 ## [0.6.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.5.3...v0.6.0) (2026-07-26)
 
 
