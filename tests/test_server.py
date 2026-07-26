@@ -4,7 +4,9 @@ import os
 import re
 from unittest.mock import patch
 
+import httpx
 import pytest
+import respx
 
 from aruba_central_mcp.client import ArubaAuthError, ArubaClientError
 from aruba_central_mcp.server import (
@@ -20,6 +22,7 @@ from aruba_central_mcp.server import (
     find_client_by_mac,
     get_ap_status,
     get_ap_throughput,
+    get_client_mobility_trail,
     get_site_summary,
     health_check,
     list_aps,
@@ -546,3 +549,95 @@ class TestHealthCheck:
         assert result["auth"] == "error"
         assert "detail" in result
         assert self.EXPECTED_KEYS <= set(result)
+
+
+@pytest.fixture
+def respx_mobility_trail():
+    """Serve two pages of mobility trail over HTTP and record what was asked for.
+
+    Mocks at the transport layer (respx) so the real client's pagination runs,
+    which is the half a stubbed ``fetch_all`` cannot exercise.
+    """
+    from aruba_central_mcp.client import PATH_CLIENTS, TOKEN_URL, ArubaClient
+
+    base_url = "apigw-test.central.arubanetworks.com"
+    seen: dict = {"limits": [], "cursors": []}
+    pages = [
+        {
+            "items": [{"occurredAt": "2026-07-26T00:00:00Z", "connectedTo": "AP-01"}],
+            "next": "cursor-1",
+            "total": 2,
+        },
+        {
+            "items": [{"occurredAt": "2026-07-26T01:00:00Z", "connectedTo": "AP-02"}],
+            "next": None,
+            "total": 2,
+        },
+    ]
+
+    def _respond(request):
+        seen["limits"].append(request.url.params.get("limit"))
+        seen["cursors"].append(request.url.params.get("next"))
+        return httpx.Response(200, json=pages[min(len(seen["limits"]) - 1, len(pages) - 1)])
+
+    with respx.mock:
+        respx.post(TOKEN_URL).mock(
+            return_value=httpx.Response(200, json={"access_token": "t", "expires_in": 7200})
+        )
+        respx.get(url__regex=rf"https://{base_url}{PATH_CLIENTS}/.+/mobility-trail.*").mock(
+            side_effect=_respond
+        )
+        client = ArubaClient(base_url, "test-id", "test-secret")
+        with patch("aruba_central_mcp.server._get_client", return_value=client):
+            yield seen
+
+class TestMobilityTrailPageSize:
+    """The mobility-trail endpoint caps its page size where the listings do not.
+
+    Central answers 400 ("The limit value was either less than 1 or greater
+    than the maximum") to ``fetch_all``'s default of 1000, which made every
+    call to this tool fail against the live API; 100 is the highest value it
+    accepts. Asserting the value here, rather than trusting the call site to
+    stay correct, is the only way a unit test can catch a regression that only
+    shows up as a 400 from a server it never talks to.
+    """
+
+    def test_walks_every_page_at_that_size(self, respx_mobility_trail):
+        """The cap is per page, so the tool must still follow the cursor.
+
+        Driven through the real ``ArubaClient.fetch_all`` rather than a stub:
+        a page size this small is only safe if pagination actually works, and
+        this repository has a history of pagination bugs. Two pages, the
+        second ending the walk by omitting ``next``.
+        """
+        result = get_client_mobility_trail("aa:bb:cc:dd:ee:01")
+
+        assert respx_mobility_trail["limits"] == ["100", "100"], (
+            f"page sizes requested: {respx_mobility_trail['limits']}"
+        )
+        assert respx_mobility_trail["cursors"] == [None, "cursor-1"], (
+            f"cursors followed: {respx_mobility_trail['cursors']}"
+        )
+        # One row per event from both pages, plus the title and two table
+        # header lines.
+        assert result.count("\n| ") == 3
+        assert "AP-01" in result and "AP-02" in result
+
+    def test_requests_a_page_size_the_endpoint_accepts(self):
+        recorded = {}
+
+        class RecordingClient:
+            def fetch_all(self, path, limit=1000, params=None):
+                recorded["limit"] = limit
+                return []
+
+            def close(self):
+                pass
+
+        with patch("aruba_central_mcp.server._get_client", return_value=RecordingClient()):
+            get_client_mobility_trail("aa:bb:cc:dd:ee:01")
+
+        assert recorded["limit"] == 100, (
+            f"mobility-trail was requested with limit={recorded['limit']}; the "
+            "endpoint rejects anything above 100 with a 400."
+        )

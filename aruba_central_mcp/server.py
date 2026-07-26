@@ -814,7 +814,11 @@ def get_client_mobility_trail(
     if end_at:
         params["end-at"] = end_at
 
-    items = client.fetch_all(path, params=params or None)
+    # limit=100: this endpoint caps the page size where the device/client
+    # listings do not, and answers 400 ("The limit value was either less than 1
+    # or greater than the maximum") to fetch_all's default of 1000 — which made
+    # every call to this tool fail. 100 is the highest value it accepts.
+    items = client.fetch_all(path, limit=100, params=params or None)
 
     if not items:
         return f"No mobility trail found for client {mac_address}."
