@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.1...v0.6.2) (2026-07-27)
+
+
+### Bug Fixes
+
+* **ci:** read AI-review guidance from the base revision, drop the checkout ([#41](https://github.com/shigechika/aruba-central-mcp/issues/41)) ([3ee7c26](https://github.com/shigechika/aruba-central-mcp/commit/3ee7c26c8dcb7d7bf775fc0aafb147456f1eab4d))
+* sync the smoke-test engine ([#39](https://github.com/shigechika/aruba-central-mcp/issues/39)) ([81b5e62](https://github.com/shigechika/aruba-central-mcp/commit/81b5e62764264c908b6fa799bf22558772780a6d))
+
 ## [0.6.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.0...v0.6.1) (2026-07-26)
 
 
