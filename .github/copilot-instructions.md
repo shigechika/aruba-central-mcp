@@ -25,9 +25,10 @@ python3 -m py_compile aruba_central_mcp/client.py   # syntax check
 This mirrors `.github/workflows/test.yml` (`pip install -e ".[test]"` +
 `pytest tests/ -v`, matrix over Python 3.10–3.14, plus one Windows job
 specifically to catch stdio newline regressions —
-see `modelcontextprotocol/python-sdk#2433`). There is no lint/format job in
-CI; don't invent style nits `ruff`/`black` would catch, because neither runs
-here.
+see `modelcontextprotocol/python-sdk#2433`), plus a `lint` job running
+`ruff check .` at the pinned version. Lint findings are therefore already
+enforced and not worth restating; formatting is not gated, so `ruff format`
+nits are still noise.
 
 # What to focus review on in this repo
 
