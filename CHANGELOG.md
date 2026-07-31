@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.2...v0.6.3) (2026-07-31)
+
+
+### Bug Fixes
+
+* **deps:** cap the MCP SDK below v2 ([#44](https://github.com/shigechika/aruba-central-mcp/issues/44)) ([8548072](https://github.com/shigechika/aruba-central-mcp/commit/85480725b248c4d599bfb9564ad63e7a8e581626))
+
 ## [0.6.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.1...v0.6.2) (2026-07-27)
 
 
