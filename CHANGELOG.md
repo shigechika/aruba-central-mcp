@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.4](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.3...v0.6.4) (2026-08-06)
+
+
+### Bug Fixes
+
+* **deps:** ignore mcp major version updates in Dependabot ([#49](https://github.com/shigechika/aruba-central-mcp/issues/49)) ([5fb1b27](https://github.com/shigechika/aruba-central-mcp/commit/5fb1b271a09242093c943bed787f3f34fb1204f0))
+
 ## [0.6.3](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.2...v0.6.3) (2026-07-31)
 
 
