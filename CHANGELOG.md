@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.4...v0.7.0) (2026-08-08)
+
+
+### Features
+
+* add pr-gate.yml admission control caller ([#53](https://github.com/shigechika/aruba-central-mcp/issues/53)) ([1d12349](https://github.com/shigechika/aruba-central-mcp/commit/1d12349e438a38506ff13026bf9144036f48f499))
+
 ## [0.6.4](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.3...v0.6.4) (2026-08-06)
 
 
