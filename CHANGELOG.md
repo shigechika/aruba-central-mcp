@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.7.0...v0.7.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* add explicit workflow permissions to test.yml and release.yml ([#55](https://github.com/shigechika/aruba-central-mcp/issues/55)) ([df62c74](https://github.com/shigechika/aruba-central-mcp/commit/df62c74de7d6498ee0d690207fd9ad7348b0c6e3))
+
 ## [0.7.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.6.4...v0.7.0) (2026-08-08)
 
 
