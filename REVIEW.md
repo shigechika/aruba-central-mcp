@@ -48,9 +48,15 @@ also receives.
   pagination has a real bug history here and nothing in CI enforces the
   coverage, so a single-page test passes while leaving the stop
   conditions (`next` absent, empty page, `total` reached) unexercised.
-  Judge this only from the diff: a pull request that does not touch
-  `tests/` at all may well be covered by tests you were not given, so
-  do not infer absence from what is missing from the prompt.
+
+  This is **deliberately narrower than the same rule in
+  `.github/copilot-instructions.md`**, which states it for any new or
+  modified `fetch_all` call. That file addresses a reviewer that can
+  read the whole repository; you receive the diff and the changed files
+  only. On a pull request that does not touch `tests/`, the existing
+  coverage is simply not in front of you — absent from the prompt is
+  not absent from the repository — so do not report it there. The
+  divergence is intentional, not an oversight to reconcile.
 
 ## Never report
 
