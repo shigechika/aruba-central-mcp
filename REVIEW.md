@@ -1,9 +1,10 @@
 # Review rules for this repository
 
-Severity rules for the AI reviewer. The reasoning behind them lives in
+Severity rules for the AI reviewer. This file decides only how severely
+each class of finding is reported here, and which classes are noise.
+The reasoning behind the rules lives in
 `.github/copilot-instructions.md` and `CLAUDE.md`, which the reviewer
-also receives — this file only decides what is blocking and what is
-noise.
+also receives.
 
 ## Always blocking
 
@@ -58,7 +59,8 @@ noise.
 - `release-please.yml` using `secrets.RELEASE_PLEASE_TOKEN` instead of
   `GITHUB_TOKEN`. Deliberate: a `GITHUB_TOKEN`-authored tag or release
   does not trigger downstream workflows.
-- A runtime-error justification for the no-`X | Y` convention. Report an
-  annotation inconsistent with the rest of a module if you see one, but
-  PEP 604 syntax runs fine on Python 3.10+ — the rule is this
-  codebase's own consistency choice, not a compatibility fix.
+- A `TypeError` or compatibility justification attached to the
+  no-`X | Y` convention. PEP 604 syntax runs fine on Python 3.10+; the
+  rule is this codebase's own consistency choice. (An annotation
+  inconsistent with the rest of its module is still reportable — as a
+  convention violation, on the strength of the convention alone.)
