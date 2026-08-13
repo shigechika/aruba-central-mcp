@@ -35,17 +35,22 @@ noise.
   the tool returns is a functional defect here — report it even though
   comment and docstring accuracy is normally out of scope when
   reviewing code.
-- **Missing tests on the two paths with a real bug history**, as
-  advisory: a new or changed `client.fetch_all` call with no
-  multi-page test, and a newly registered tool with no entry in
-  `scripts/smoke_probes.py`. Report these even though a missing test is
-  not itself a bug the diff introduces.
+- **A new or changed `client.fetch_all` call with no multi-page test**,
+  as advisory. Cursor-based pagination has a real bug history here, and
+  nothing in CI enforces the coverage: a single-page test passes while
+  leaving the stop conditions (`next` absent, empty page, `total`
+  reached) unexercised. Report it even though a missing test is not
+  itself a bug the diff introduces.
 
 ## Never report
 
 - Formatting nits. `ruff check .` is gated in CI at a pinned version,
   but `ruff format` deliberately is not — see `ruff.toml`. This
   repository has not opted into a formatter.
+- Anything CI already fails on, restated as a review finding. A tool
+  registered without an entry in `scripts/smoke_probes.py` is the
+  common case: `tests/test_smoke_probes.py` already fails the build for
+  it, so a review comment adds a round trip and no information.
 - Suggestions to hand-build an MCP content envelope
   (`{"content": [...], "isError": ...}`) inside a tool handler.
   FastMCP wraps return values and derives `isError` from raised
