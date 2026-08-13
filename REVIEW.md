@@ -9,11 +9,15 @@ also receives.
 
 ## Always blocking
 
-- Anything reaching **stdout** other than the JSON-RPC stream: a
-  `print()`, a logger without an explicit stderr handler, or a
-  dependency whose default logging configuration writes there. This is
-  a stdio MCP server, so stdout is the protocol channel; corrupting it
-  breaks every connected client.
+- Anything reaching **stdout** from code that runs while the stdio
+  server is serving — `server.py`, `client.py`, and `__main__.py` after
+  `mcp.run()` is entered: a `print()`, a logger without an explicit
+  stderr handler, or a dependency whose default logging configuration
+  writes there. Stdout is the JSON-RPC channel there, and corrupting it
+  breaks every connected client. This does **not** cover code that
+  never runs alongside the server: `--check` returns before `mcp.run()`
+  and prints its result to stdout on purpose, and `scripts/smoke_test.py`
+  is a standalone CLI whose report *is* its stdout.
 - A credential or token reaching a log line or a tool response — the
   `Authorization` header, `ARUBA_CENTRAL_CLIENT_SECRET`, or a raw
   access token — at any level, `DEBUG` included.
@@ -22,8 +26,9 @@ also receives.
   repository is public, and `tests/test_smoke_probes.py` exists to stop
   exactly this.
 - Turning `__main__.py`'s `os._exit(0)` into `sys.exit(0)` or a
-  graceful join. That reintroduces an interpreter-shutdown crash the CI
-  matrix has actually caught.
+  graceful join. FastMCP's stdio reader runs in a daemon thread blocked
+  on `sys.stdin`, and joining it at interpreter shutdown can crash with
+  `_enter_buffered_busy` on Python 3.14, which the CI matrix covers.
 - A tool handler that catches a broad `except Exception` and returns
   `None` or an empty result without re-raising or surfacing a visible
   error, so a real failure reads to the caller as a normal empty
@@ -37,12 +42,15 @@ also receives.
   the tool returns is a functional defect here — report it even though
   comment and docstring accuracy is normally out of scope when
   reviewing code.
-- **A new or changed `client.fetch_all` call with no multi-page test**,
-  as advisory. Cursor-based pagination has a real bug history here, and
-  nothing in CI enforces the coverage: a single-page test passes while
-  leaving the stop conditions (`next` absent, empty page, `total`
-  reached) unexercised. Report it even though a missing test is not
-  itself a bug the diff introduces.
+- **A change to `client.fetch_all`'s own pagination logic, or to a
+  `fetch_all` call site, where the same diff touches `tests/` without
+  covering a multi-page response**, as advisory. Cursor-based
+  pagination has a real bug history here and nothing in CI enforces the
+  coverage, so a single-page test passes while leaving the stop
+  conditions (`next` absent, empty page, `total` reached) unexercised.
+  Judge this only from the diff: a pull request that does not touch
+  `tests/` at all may well be covered by tests you were not given, so
+  do not infer absence from what is missing from the prompt.
 
 ## Never report
 
@@ -60,9 +68,12 @@ also receives.
   (`{"content": [...], "isError": ...}`) inside a tool handler.
   FastMCP wraps return values and derives `isError` from raised
   exceptions already.
-- `release-please.yml` using `secrets.RELEASE_PLEASE_TOKEN` instead of
-  `GITHUB_TOKEN`. Deliberate: a `GITHUB_TOKEN`-authored tag or release
-  does not trigger downstream workflows.
+- Suggestions to *replace* `release-please.yml`'s
+  `secrets.RELEASE_PLEASE_TOKEN` with `GITHUB_TOKEN`. Preferring the
+  dedicated token is deliberate, because a `GITHUB_TOKEN`-authored tag
+  or release does not trigger downstream workflows. (The line is a
+  `||` fallback, not an either/or, so a finding about the fallback arm
+  itself is still fair game.)
 - A `TypeError` or compatibility justification attached to the
   no-`X | Y` convention. PEP 604 syntax runs fine on Python 3.10+; the
   rule is this codebase's own consistency choice. (An annotation
