@@ -1,8 +1,9 @@
 # Review rules for this repository
 
-Severity rules for the AI reviewer. This file decides only how severely
-each class of finding is reported here, and which classes are noise.
-The reasoning behind the rules lives in
+Review rules for this repository, on top of the reviewer's default
+focus. Three things: which findings are blocking here, which classes to
+report that the default focus would otherwise skip, and which are
+noise. The reasoning behind the rules lives in
 `.github/copilot-instructions.md` and `CLAUDE.md`, which the reviewer
 also receives.
 
@@ -48,10 +49,13 @@ also receives.
 - Formatting nits. `ruff check .` is gated in CI at a pinned version,
   but `ruff format` deliberately is not — see `ruff.toml`. This
   repository has not opted into a formatter.
-- Anything CI already fails on, restated as a review finding. A tool
-  registered without an entry in `scripts/smoke_probes.py` is the
-  common case: `tests/test_smoke_probes.py` already fails the build for
-  it, so a review comment adds a round trip and no information.
+- A tool registered without an entry in `scripts/smoke_probes.py`.
+  `tests/test_smoke_probes.py` already fails the build for it, so a
+  review comment costs a round trip and carries no information. This
+  covers the missing-probe assertion only — **not** the
+  network-identifying-literal assertion in that same file, which stays
+  blocking above: a leak into a public repository is worth catching
+  twice.
 - Suggestions to hand-build an MCP content envelope
   (`{"content": [...], "isError": ...}`) inside a tool handler.
   FastMCP wraps return values and derives `isError` from raised
