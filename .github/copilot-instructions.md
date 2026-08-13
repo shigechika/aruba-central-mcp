@@ -136,9 +136,11 @@ graceful join — it reintroduces a real, CI-caught crash.
 
 # Out of scope for review comments
 
-- Formatting/style nits: there is no `ruff`/`black`/`mypy` step in CI for
-  this repo, so don't hold this repo to a style standard it hasn't opted
-  into.
+- Formatting nits: CI does gate `ruff check .` (see "Build & validate"
+  above), but `ruff format` deliberately is not gated — see `ruff.toml`.
+  There is no `black` or `mypy` step either. So don't hold this repo to a
+  formatting or typing standard it hasn't opted into, and don't restate
+  lint findings `ruff check` already enforces.
 - `release-please.yml`'s use of `secrets.RELEASE_PLEASE_TOKEN` instead of
   `GITHUB_TOKEN` is intentional (`GITHUB_TOKEN`-authored tags/releases don't
   trigger downstream workflows) — don't suggest reverting it.
