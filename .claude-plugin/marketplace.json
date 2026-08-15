@@ -1,0 +1,17 @@
+{
+  "name": "aruba-central-mcp",
+  "description": "Aruba Central MCP server, packaged as a Claude Code plugin.",
+  "owner": {
+    "name": "AIKAWA Shigechika",
+    "url": "https://github.com/shigechika"
+  },
+  "plugins": [
+    {
+      "name": "aruba-central-mcp",
+      "source": "./plugin",
+      "description": "Aruba Central (GreenLake New Central API) for Claude Code, through an OAuth2 Client Credentials service account. List and inspect access points, radios, BSSIDs, WLANs, swarms, switches, and wireless clients, get bandwidth/throughput trends and client mobility trails, and run a one-shot daily_brief AP health check. Every tool only reads — nothing in Central is configured.",
+      "category": "networking",
+      "homepage": "https://shigechika.github.io/aruba-central-mcp/"
+    }
+  ]
+}

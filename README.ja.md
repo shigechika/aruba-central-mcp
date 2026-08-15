@@ -6,6 +6,8 @@
 
 アクセスポイント、スイッチ、無線クライアントの状態を MCP 対応 AI アシスタント（Claude Code、Claude Desktop など）に公開します。
 
+ドキュメント: <https://shigechika.github.io/aruba-central-mcp/ja/>
+
 ## 機能
 
 ### アクセスポイント
@@ -106,7 +108,25 @@ pip install -e .
 
 ## 使い方
 
-### Claude Code
+### Claude Code（プラグイン）
+
+このリポジトリはプラグイン 1 個のマーケットプレイスも兼ねているので、Claude Code
+から直接インストールできます。
+
+```
+/plugin marketplace add shigechika/aruba-central-mcp
+/plugin install aruba-central-mcp@aruba-central-mcp
+```
+
+プラグインは `uvx aruba-central-mcp` を起動し、[設定](#設定)に記載した3つの
+環境変数を読みます。Claude Code を起動する前に export しておいてください。
+
+プラグインは `uvx` を起動するため、Claude Code を実行するプロセスの `PATH` に
+`uvx` が通っている必要があります。ログインシェルなら通常問題ありませんが、
+GUI から起動した場合は通っていないことがあります。プラグインが起動しない場合は
+[uv](https://docs.astral.sh/uv/) をシステム全体にインストールしてください。
+
+### Claude Code（手動）
 
 ```bash
 claude mcp add aruba-central \
