@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "aruba-central-mcp",
+  "displayName": "Aruba Central MCP",
+  "description": "Aruba Central (GreenLake New Central API) for Claude Code, through an OAuth2 Client Credentials service account. List and inspect access points, radios, BSSIDs, WLANs, swarms, switches, and wireless clients, get bandwidth/throughput trends and client mobility trails, and run a one-shot daily_brief AP health check. Every tool only reads — nothing in Central is configured. Requires ARUBA_CENTRAL_BASE_URL, ARUBA_CENTRAL_CLIENT_ID, and ARUBA_CENTRAL_CLIENT_SECRET.",
+  "author": {
+    "name": "AIKAWA Shigechika",
+    "url": "https://github.com/shigechika"
+  },
+  "homepage": "https://shigechika.github.io/aruba-central-mcp/",
+  "repository": "https://github.com/shigechika/aruba-central-mcp",
+  "license": "MIT",
+  "keywords": [
+    "aruba",
+    "aruba-central",
+    "network",
+    "wireless",
+    "wifi",
+    "monitoring",
+    "greenlake"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "aruba-central-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["aruba-central-mcp"],
+      "env": {
+        "ARUBA_CENTRAL_BASE_URL": "${ARUBA_CENTRAL_BASE_URL:-}",
+        "ARUBA_CENTRAL_CLIENT_ID": "${ARUBA_CENTRAL_CLIENT_ID:-}",
+        "ARUBA_CENTRAL_CLIENT_SECRET": "${ARUBA_CENTRAL_CLIENT_SECRET:-}"
+      }
+    }
+  }
+}

@@ -8,6 +8,8 @@ MCP server for [Aruba Central](https://www.arubanetworks.com/products/network-ma
 
 Exposes access point, switch, and wireless client status to MCP-compatible AI assistants (Claude Code, Claude Desktop, etc.) via STDIO transport.
 
+Documentation: <https://shigechika.github.io/aruba-central-mcp/>
+
 ## Features
 
 ### Access Points
@@ -108,7 +110,25 @@ For details, see:
 
 ## Usage
 
-### Claude Code
+### Claude Code (plugin)
+
+This repository doubles as a single-plugin marketplace, so Claude Code can install
+the server for you:
+
+```
+/plugin marketplace add shigechika/aruba-central-mcp
+/plugin install aruba-central-mcp@aruba-central-mcp
+```
+
+The plugin launches `uvx aruba-central-mcp` and reads the same three environment
+variables described in [Configuration](#configuration); export them before
+starting Claude Code.
+
+`uvx` must be on the `PATH` of the process that runs Claude Code — a login
+shell usually has it, but a GUI-launched app may not; install
+[uv](https://docs.astral.sh/uv/) system-wide if the plugin fails to start.
+
+### Claude Code (manual)
 
 ```bash
 claude mcp add aruba-central \
