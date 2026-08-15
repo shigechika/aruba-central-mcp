@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.7.1...v0.8.0) (2026-08-15)
+
+
+### Features
+
+* package the server as a Claude Code plugin ([#58](https://github.com/shigechika/aruba-central-mcp/issues/58)) ([d53e8af](https://github.com/shigechika/aruba-central-mcp/commit/d53e8af9847a00bc227f58dfd6b5a3b9c8b44aa2))
+
 ## [0.7.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.7.0...v0.7.1) (2026-08-11)
 
 
