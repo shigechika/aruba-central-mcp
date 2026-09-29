@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.8.0...v0.9.0) (2026-09-29)
+
+
+### Features
+
+* require mcp 2.x (MCPServer) and drop 1.x support ([#62](https://github.com/shigechika/aruba-central-mcp/issues/62)) ([f082397](https://github.com/shigechika/aruba-central-mcp/commit/f08239759fd45681eab0cc152e9825857fff3c46))
+
 ## [0.8.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.7.1...v0.8.0) (2026-08-15)
 
 
