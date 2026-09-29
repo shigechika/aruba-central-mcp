@@ -9,12 +9,17 @@ STDIO transport is used for JSON-RPC communication.
 from __future__ import annotations
 
 import datetime
+import functools
+import inspect
 import os
 import re
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp.shared.exceptions import MCPError
 
+from aruba_central_mcp import __version__
 from aruba_central_mcp.client import (
     ArubaAPIError,
     ArubaClient,
@@ -30,7 +35,51 @@ from aruba_central_mcp.client import (
     PATH_WLANS,
 )
 
-mcp = FastMCP("aruba-central")
+def _expose_errors(fn):
+    """Wrap a tool so any exception reaches the model as a ToolError with its message.
+
+    mcp 1.x returned the exception text for every failing tool. mcp 2.x hides it
+    (the model sees only "Error executing tool <name>") unless a ToolError is raised.
+    """
+    if inspect.iscoroutinefunction(fn):
+
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            except (ToolError, MCPError):
+                raise
+            except Exception as exc:
+                raise ToolError(str(exc) or type(exc).__name__) from exc
+
+    else:
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except (ToolError, MCPError):
+                raise
+            except Exception as exc:
+                raise ToolError(str(exc) or type(exc).__name__) from exc
+
+    return wrapper
+
+
+class _Server(MCPServer):
+    """MCPServer whose tools report their exception messages (see _expose_errors)."""
+
+    def tool(self, *args, **kwargs):
+        register = super().tool(*args, **kwargs)
+
+        def decorator(fn):
+            register(_expose_errors(fn))
+            return fn
+
+        return decorator
+
+
+mcp = _Server("aruba-central", version=__version__)
 
 _client: ArubaClient | None = None
 
@@ -136,7 +185,6 @@ def health_check() -> dict:
     ARUBA_CENTRAL_BASE_URL, empty string if unset), and ``auth`` (ok / error /
     missing-env). On a degraded or error result, ``detail`` carries the reason.
     """
-    from aruba_central_mcp import __version__
 
     # Fixed shape: every key is present regardless of outcome, so callers can
     # read it uniformly and rely on `status` to judge health.
