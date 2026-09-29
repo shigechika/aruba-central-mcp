@@ -3,7 +3,7 @@
 `aruba-central-mcp` is an MCP (Model Context Protocol) server exposing Aruba
 Central (GreenLake New Central API) data — APs, switches, wireless clients —
 to AI assistants over **stdio transport**. Built on the official `mcp` Python
-SDK's `FastMCP` (`aruba_central_mcp/server.py`), with `ArubaClient`
+SDK's `MCPServer` (`aruba_central_mcp/server.py`), with `ArubaClient`
 (`aruba_central_mcp/client.py`) handling OAuth2 Client Credentials auth,
 `httpx`, and automatic pagination.
 
@@ -42,16 +42,16 @@ This exact bug class is why CI runs a dedicated Windows job (stdio newline
 handling is platform-sensitive) — treat it as a real, previously-hit failure
 mode, not a theoretical one.
 
-## 2. FastMCP already wraps tool returns — don't ask for manual envelope code
+## 2. MCPServer already wraps tool returns — don't ask for manual envelope code
 
 `server.py`'s `@mcp.tool()`-decorated functions can return plain Python
-values/dicts; FastMCP handles the MCP content-envelope wrapping and derives
+values/dicts; MCPServer handles the MCP content-envelope wrapping and derives
 `isError` from raised exceptions. Do **not** suggest that a tool handler
 manually construct `{"content": [...], "isError": ...}` — that's a
 hand-rolled-stdio-server pattern (relevant in other repos in this family,
 not this one) and would be redundant/wrong here. The existing convention,
 per `server.py`, is: let unexpected exceptions propagate (`raise`) so
-FastMCP turns them into an MCP error; only convert to a plain string/dict
+MCPServer turns them into an MCP error; only convert to a plain string/dict
 return for a specific, anticipated condition the caller should see as a
 normal result rather than a tool failure (e.g. `find_client_by_mac` catching
 a 404 `ArubaAPIError` and returning "No client found..." instead of
@@ -128,7 +128,7 @@ a bare `X | Y` annotation inconsistent with the rest of the file.
 
 The console-script entry point (`aruba-central-mcp`; also `--check`, which
 verifies env vars + OAuth2 auth and exits) catches `KeyboardInterrupt` and
-calls `os._exit(0)` instead of a graceful shutdown: FastMCP's stdio reader
+calls `os._exit(0)` instead of a graceful shutdown: MCPServer's stdio reader
 runs in a daemon thread blocked on `sys.stdin`, and joining it at interpreter
 shutdown can crash with `_enter_buffered_busy` on Python 3.14 (which the CI
 matrix covers). Flag a cleanup diff that "fixes" this into `sys.exit(0)` or a

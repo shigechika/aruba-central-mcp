@@ -26,7 +26,7 @@ also receives.
   repository is public, and `tests/test_smoke_probes.py` exists to stop
   exactly this.
 - Turning `__main__.py`'s `os._exit(0)` into `sys.exit(0)` or a
-  graceful join. FastMCP's stdio reader runs in a daemon thread blocked
+  graceful join. MCPServer's stdio reader runs in a daemon thread blocked
   on `sys.stdin`, and joining it at interpreter shutdown can crash with
   `_enter_buffered_busy` on Python 3.14, which the CI matrix covers.
 - A tool handler that catches a broad `except Exception` and returns
@@ -72,7 +72,7 @@ also receives.
   twice.
 - Suggestions to hand-build an MCP content envelope
   (`{"content": [...], "isError": ...}`) inside a tool handler.
-  FastMCP wraps return values and derives `isError` from raised
+  MCPServer wraps return values and derives `isError` from raised
   exceptions already.
 - Suggestions to *replace* `release-please.yml`'s
   `secrets.RELEASE_PLEASE_TOKEN` with `GITHUB_TOKEN`. Preferring the

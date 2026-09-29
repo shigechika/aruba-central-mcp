@@ -13,8 +13,9 @@ import os
 import re
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
+from aruba_central_mcp import __version__
 from aruba_central_mcp.client import (
     ArubaAPIError,
     ArubaClient,
@@ -30,7 +31,7 @@ from aruba_central_mcp.client import (
     PATH_WLANS,
 )
 
-mcp = FastMCP("aruba-central")
+mcp = MCPServer("aruba-central", version=__version__)
 
 _client: ArubaClient | None = None
 
@@ -136,7 +137,6 @@ def health_check() -> dict:
     ARUBA_CENTRAL_BASE_URL, empty string if unset), and ``auth`` (ok / error /
     missing-env). On a degraded or error result, ``detail`` carries the reason.
     """
-    from aruba_central_mcp import __version__
 
     # Fixed shape: every key is present regardless of outcome, so callers can
     # read it uniformly and rely on `status` to judge health.
