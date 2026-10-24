@@ -169,22 +169,36 @@ even if a newer version exists.
 
 ### How firmware_status uses it
 
-- Swarm -> group map: list the Classic groups, then `/firmware/v1/swarms?group=<g>`
-  and the compliance version for each group. Cached in-process for 300 s when
-  every group was read; a call spends at most 40 s building it, and groups not
-  read (failure or time) are named in Notes and not cached.
-- The whole Classic swarm list (no group) is read once per call for state,
-  reason and `upgrade_required`.
-- Join by `swarm_id` = `clusterId`; fallback by name within the swarm's group;
-  several Classic swarms with that name are reported as ambiguous.
-- Per swarm: Classic group, the group's compliance version with
-  "matches running" or "pending: running ...", "older than running" /
-  "older than recommended ..." when it is lower (version numbers compared,
-  nothing inferred about vulnerabilities), the scheduled time as ISO 8601 UTC
-  with the server's local time, and Classic state, reason, `upgrade_required`.
-- `group=` matches the Classic group when New Central has none.
+- One deadline for the whole call (48 s, under a 60 s client cutoff): the New
+  Central reads, the Classic group list and every per-group read draw from
+  it. Each request is refused with under a second left, and its HTTP timeout
+  is cut to what remains; what was not read in time is named in Notes.
+- Groups: `/configuration/v2/groups` with `limit=20` (the documented range is
+  1-20; a live tenant answered `limit=100` with all its groups) and `offset`,
+  until a page comes back empty -- a short page is not taken as the end.
+- Per group: `/firmware/v1/swarms?group=<g>` (its rows give swarm -> group and
+  the state, reason, `upgrade_required` shown per swarm; there is no second
+  whole-list read) and the IAP compliance version. A compliance failure is
+  recorded on its own; the group's swarms stay mapped.
+- Cache: the group list and each group's read are kept for 300 s in the
+  process. Partial results are kept too, and the next call reads the groups
+  not read yet first (then the oldest), so a tenant too large for one call
+  converges over a few calls.
+- Join: `swarm_id` = `clusterId`. Fallback by name only to a Classic swarm whose
+  group is known and is one of the New Central swarm's groups; several such
+  swarms are reported as ambiguous.
+- Versions are compared normalised: the dotted numbers, and the build number
+  only when both sides carry one (`8.10.0.24` = `8.10.0.24_97188`). Per swarm:
+  Classic group, the group's compliance version with "matches running" or
+  "pending: running ...", "older than running" / "older than recommended ..."
+  when it is lower (nothing inferred about vulnerabilities), the scheduled
+  time as ISO 8601 (UTC, then the server's local offset), and Classic state,
+  reason, `upgrade_required`.
+- `group=` matches the Classic group when New Central has none, case-insensitively
+  everywhere (the compliance section included).
 - With no site or swarm filter, Classic swarms that New Central does not list
-  (0 APs, Down) are shown in a trailing section.
+  (0 APs, Down) are shown in a trailing section -- also when no New Central AP
+  matched, e.g. a group with only stale swarms.
 
 ## Selectors (group / site / swarm)
 
@@ -202,8 +216,7 @@ How it reads:
   with no filter, every AP. Not narrowed by `serialNumber in (...)`: about 15
   serials fit in 256 characters, so a swarm of 140 APs would take 10 requests
   where the unfiltered read takes one.
-- Classic: see "How firmware_status uses it" above (group map per Classic
-  group, cached; the whole swarm list once per call). An authentication
+- Classic: see "How firmware_status uses it" above. An authentication
   failure stops every Classic call of that call; a failure in one group only
   leaves that group unread. The New Central part of the answer is kept.
 - Join: Classic `swarm_id` = New Central `clusterId`; otherwise by swarm name

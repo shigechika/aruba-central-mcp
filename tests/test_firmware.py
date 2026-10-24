@@ -14,7 +14,13 @@ from unittest.mock import patch
 import pytest
 
 from aruba_central_mcp import server
-from aruba_central_mcp.classic import PATH_FW_COMPLIANCE, PATH_FW_VERSIONS, ClassicAuthError, ClassicError
+from aruba_central_mcp.classic import (
+    PATH_FW_COMPLIANCE,
+    PATH_FW_VERSIONS,
+    ClassicAuthError,
+    ClassicDeadline,
+    ClassicError,
+)
 from aruba_central_mcp.client import PATH_APS, PATH_FIRMWARE_DETAILS, ArubaAPIError
 
 # AOS-8 APs as New Central lists them: no deviceGroupName.
@@ -49,11 +55,16 @@ CLASSIC_GROUPS = {
          "status": {"state": "example-ok", "reason": "Firmware version upto date"}},
     ],
     "grp-empty": [],
+    "grp-stale": [
+        {"swarm_id": "stale2", "swarm_name": "gone-vc", "aps_count": 0, "device_status": "Down",
+         "firmware_version": "8.6.0.16_1", "recommended": "8.10.0.24_3", "upgrade_required": True, "status": {}},
+    ],
 }
 COMPLIANCE = {
     "grp-one": {"firmware_compliance_version": "8.10.0.24_3", "compliance_scheduled_at": SCHEDULED},
     "grp-two": {"firmware_compliance_version": "8.13.3.1_2"},
     "grp-empty": {"firmware_compliance_version": ""},
+    "grp-stale": {"firmware_compliance_version": "8.10.0.24_3"},
 }
 
 
@@ -63,7 +74,7 @@ class FakeNewCentral:
         self.aps = APS if aps is None else aps
         self.calls = []
 
-    def fetch_all(self, path, limit=1000, params=None):
+    def fetch_all(self, path, limit=1000, params=None, deadline=None):
         self.calls.append((path, params))
         if path == PATH_APS:
             return self.aps
@@ -80,19 +91,24 @@ class FakeNewCentral:
 class FakeClassic:
     persist_error = None
 
-    def __init__(self, fail=False, fail_group=None, groups=None):
+    def __init__(self, fail=False, fail_group=None, groups=None, compliance_fail=None, deadline_after=None):
         self.fail = fail
         self.fail_group = fail_group
+        self.compliance_fail = compliance_fail
+        self.deadline_after = deadline_after  # raise ClassicDeadline after this many swarm reads
         self.groups = CLASSIC_GROUPS if groups is None else groups
         self.calls = []
 
-    def list_groups(self):
+    def list_groups(self, deadline=None):
         self.calls.append(("groups", None))
         if self.fail:
             raise ClassicError("Classic API error (/configuration/v2/groups): HTTP 500")
         return list(self.groups)
 
-    def list_swarms(self, group=""):
+    def list_swarms(self, group="", deadline=None):
+        reads = len([c for c in self.calls if c[0] == "swarms"])
+        if self.deadline_after is not None and reads >= self.deadline_after:
+            raise ClassicDeadline("time budget used up")
         self.calls.append(("swarms", group))
         if group == self.fail_group:
             raise ClassicError("Classic API error (/firmware/v1/swarms): HTTP 500")
@@ -100,9 +116,11 @@ class FakeClassic:
             return self.groups.get(group, [])
         return [row for rows in self.groups.values() for row in rows]
 
-    def get(self, path, params=None):
+    def get(self, path, params=None, deadline=None):
         if path == PATH_FW_COMPLIANCE:
             self.calls.append(("compliance", params["group"]))
+            if params["group"] == self.compliance_fail:
+                raise ClassicError("Classic API error (/firmware/v1/upgrade/compliance_version): HTTP 400")
             return COMPLIANCE.get(params["group"], {})
         if path == PATH_FW_VERSIONS:
             return {"data": [{"firmware_version": "8.13.3.1_2", "release_status": "release", "create_date": "2026-10-20"}]}
@@ -167,7 +185,7 @@ class TestFirmwareStatus:
         out = run(classic=FakeClassic())
         assert "## Group compliance (Classic, IAP)" in out
         assert "- grp-two: 8.13.3.1_2" in out and "- grp-empty: none" in out
-        assert "## Classic-only swarms (1;" in out and "old-vc id=stale1 group=grp-one aps=0 device_status=Down" in out
+        assert "## Classic-only swarms (2;" in out and "old-vc id=stale1 group=grp-one aps=0 device_status=Down" in out
 
     def test_classic_only_hidden_when_site_or_swarm_filter_given(self):
         assert "Classic-only" not in run(classic=FakeClassic(), site="Site A")
@@ -197,31 +215,53 @@ class TestFirmwareStatus:
     def test_group_map_is_cached(self):
         classic = FakeClassic()
         run(classic=classic)
-        first = len([c for c in classic.calls if c[0] == "compliance"])
-        out = run(classic=classic)
-        assert len([c for c in classic.calls if c[0] == "compliance"]) == first  # no second round of group calls
-        assert "from cache" in out
-        assert [c for c in classic.calls if c == ("swarms", "")].__len__() == 2  # the swarm list is read every call
+        first = list(classic.calls)
+        run(classic=classic)
+        assert classic.calls == first  # nothing re-read within the TTL, and no extra whole-list read
+        assert not [c for c in first if c == ("swarms", "")]
 
-    def test_cache_expires(self, monkeypatch):
+    def test_cache_expires(self):
         classic = FakeClassic()
         run(classic=classic)
-        server._classic_cache["at"] -= server.CLASSIC_CACHE_TTL + 1
-        run(classic=classic)
+        server._classic_cache["groups_at"] -= server.CLASSIC_CACHE_TTL + 1
+        for entry in server._classic_cache["read"].values():
+            entry["at"] -= server.CLASSIC_CACHE_TTL + 1
+        out = run(classic=classic)
         assert len([c for c in classic.calls if c[0] == "groups"]) == 2
+        assert "s old" not in out
 
-    def test_partial_group_failure_is_reported_and_not_cached(self):
+    def test_partial_group_failure_is_reported(self):
         classic = FakeClassic(fail_group="grp-two")
         out = run(classic=classic)
-        assert "Classic groups not read (1 of 3): grp-two" in out
+        assert "Classic groups not read yet (1 of 4): grp-two" in out
         assert "classic: group=grp-one" in line_of(out, "swarm-a")
-        assert "classic: group=-" in line_of(out, "swarm-b")  # joined by id, group unknown
-        assert server._classic_cache["value"] is None
+        assert "not found in the groups read (1 not read yet)" in line_of(out, "swarm-b")
+        assert set(server._classic_cache["read"]) == {"grp-one", "grp-empty", "grp-stale"}  # what was read is kept
+
+    def test_partial_reads_rotate_and_converge(self):
+        first = FakeClassic(deadline_after=1)
+        out = run(classic=first)
+        assert "time budget used up" in out
+        read_first = {c[1] for c in first.calls if c[0] == "swarms"}
+        assert len(read_first) == 1
+        second = FakeClassic()
+        out = run(classic=second)
+        read_second = {c[1] for c in second.calls if c[0] == "swarms"}
+        assert read_second == set(CLASSIC_GROUPS) - read_first  # continues with what was not read
+        assert "not read yet" not in out
+
+    def test_compliance_failure_keeps_the_swarm_mapping(self):
+        out = run(classic=FakeClassic(compliance_fail="grp-two"))
+        line_b = line_of(out, "swarm-b")
+        assert "classic: group=grp-two compliance=unavailable" in line_b and "state=example-ok" in line_b
+        assert "compliance version unavailable for 1 group(s): grp-two" in out
+        assert "not read yet" not in out
+        assert "- grp-two: unavailable" in out
 
     def test_time_budget_leaves_groups_unread(self, monkeypatch):
-        monkeypatch.setattr(server, "CLASSIC_BUDGET_SECONDS", -1)
+        monkeypatch.setattr(server, "TOOL_BUDGET_SECONDS", 1)
         out = run(classic=FakeClassic())
-        assert "Classic groups not read (3 of 3)" in out and "time budget used up" in out
+        assert "Classic groups not read yet (4 of 4)" in out and "time budget used up" in out
 
     def test_classic_failure_keeps_new_central_data(self):
         out = run(classic=FakeClassic(fail=True))
@@ -231,7 +271,7 @@ class TestFirmwareStatus:
 
     def test_classic_auth_failure_stops_all_classic_calls(self):
         class AuthBroken(FakeClassic):
-            def list_groups(self):
+            def list_groups(self, deadline=None):
                 self.calls.append(("groups", None))
                 raise ClassicAuthError("token refresh rejected (HTTP 400)")
 
@@ -241,11 +281,44 @@ class TestFirmwareStatus:
 
     def test_classic_os_error_does_not_escape(self):
         class DiskBroken(FakeClassic):
-            def list_groups(self):
+            def list_groups(self, deadline=None):
                 raise PermissionError("lock file")
 
         out = run(classic=DiskBroken())
         assert "Classic Central request failed" in out and "lock file" in out
+
+    def test_name_fallback_needs_a_known_matching_group(self):
+        # swarm-a (New Central group grp-one, id not in Classic) must not join a same-named swarm of another group
+        groups = {"grp-one": [], "grp-two": [{"swarm_id": "zz", "swarm_name": "swarm-a", "status": {}}]}
+        aps = [dict(APS[0], deviceGroupName="grp-one", clusterId="nc-only")]
+        out = run(new_central=FakeNewCentral(aps=aps), classic=FakeClassic(groups=groups))
+        assert "classic: not found" in line_of(out, "swarm-a")
+
+    def test_versions_are_compared_normalised(self):
+        comp = {"version": "8.13.3.1"}
+        text = server._compliance_text(
+            comp, server.collections.Counter({"8.13.3.1_2": 1}), server.collections.Counter({"8.13.3.1_2": 1})
+        )
+        assert text == "compliance=8.13.3.1 (matches running)"
+        assert server._same_version("8.10.0.24_97188", "8.10.0.24")
+        assert not server._same_version("8.10.0.24_1", "8.10.0.24_2")
+        assert server._older("8.10.0.14_1", "8.10.0.24_3") and not server._older("8.13.3.1", "8.13.3.1_2")
+
+    def test_classic_configured_but_failing_shows_the_failure(self):
+        out = run(classic=FakeClassic(fail=True), group="grp-one")
+        assert "configure Classic" not in out
+        assert out.startswith("No swarms matched.") and "Classic Central request failed" in out
+
+    def test_compliance_section_matches_groups_case_insensitively(self):
+        aps = [dict(ap, deviceGroupName="GRP-ONE") for ap in APS[:2]]
+        out = run(new_central=FakeNewCentral(aps=aps), classic=FakeClassic(), group="grp-one")
+        assert "- grp-one: 8.10.0.24_3" in out
+
+    def test_empty_ap_result_still_lists_classic_only_swarms(self):
+        out = run(classic=FakeClassic(), group="grp-stale")
+        assert out.startswith("# Firmware Status (0 swarms, 0 APs) [group=grp-stale]")
+        assert "gone-vc id=stale2 group=grp-stale aps=0 device_status=Down" in out
+        assert "- grp-stale: 8.10.0.24_3" in out
 
     def test_aps_without_a_cluster_are_grouped_per_group_and_site(self):
         loose = [
@@ -294,6 +367,12 @@ class TestEpochText:
     def test_seconds_and_milliseconds(self, value, expected):
         assert server._epoch_text(value).startswith(expected)
 
+    def test_iso_with_offsets_and_no_zone_name(self):
+        import re
+
+        text = server._epoch_text(1761300000)
+        assert re.fullmatch(r"2025-10-24T10:00:00\+00:00 \(local \d{4}-\d\d-\d\dT\d\d:\d\d[+-]\d\d:\d\d\)", text)
+
     def test_out_of_range_returns_the_raw_value(self):
         assert server._epoch_text(1e300) == str(1e300)
 
@@ -311,7 +390,7 @@ class TestFirmwareVersions:
 
     def test_duplicate_names_are_refused(self):
         class Dup(FakeClassic):
-            def list_swarms(self, group=""):
+            def list_swarms(self, group="", deadline=None):
                 return [{"swarm_id": "x1", "swarm_name": "vc"}, {"swarm_id": "x2", "swarm_name": "VC"}]
 
         with patch.object(server, "_get_classic", return_value=Dup()):
@@ -436,14 +515,20 @@ class TestMultiPageFirmwareDetails:
                  "count": 1, "total": 3, "next": None}
         with respx.mock:
             respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json={"access_token": "t", "expires_in": 7200}))
-            respx.get(f"https://{base}{PATH_APS}").mock(
-                return_value=httpx.Response(200, json={"items": aps, "count": 3, "total": 3, "next": None})
+            # APs of one swarm split across two inventory pages (cursor paging).
+            ap_route = respx.get(f"https://{base}{PATH_APS}").mock(
+                side_effect=[
+                    httpx.Response(200, json={"items": aps[:2], "count": 2, "total": 3, "next": "p2"}),
+                    httpx.Response(200, json={"items": aps[2:], "count": 1, "total": 3, "next": None}),
+                ]
             )
             fw = respx.get(f"https://{base}{PATH_FIRMWARE_DETAILS}").mock(
                 side_effect=[httpx.Response(200, json=page1), httpx.Response(200, json=page2)]
             )
             real = ArubaClient(base, "id", "secret")
             out = run(new_central=real, site="site a")
+        assert ap_route.call_count == 2 and ap_route.calls[1].request.url.params["next"] == "p2"
+        assert "aps=3/3 online" in out  # both inventory pages reached the swarm line
         assert fw.call_count == 2
         second = fw.calls[1].request.url.params
         assert second["next"] == "2" and "siteName in ('Site A')" in second["filter"]

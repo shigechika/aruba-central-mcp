@@ -200,3 +200,28 @@ class TestContextManager:
         """Client works as a context manager."""
         with ArubaClient(BASE_URL, "test-id", "test-secret") as c:
             assert c._get_token() == "test-token"
+
+
+
+class TestDeadline:
+    def test_expired_deadline_refuses_the_request(self, client):
+        import time
+
+        with respx.mock:
+            route = respx.get(f"https://{BASE_URL}/x")
+            with pytest.raises(ArubaAPIError, match="time budget"):
+                client.get("/x", deadline=time.monotonic() + 0.2)
+            assert not route.called
+
+    def test_fetch_all_passes_the_deadline_to_every_page(self, client):
+        import time
+
+        pages = [
+            httpx.Response(200, json={"items": [{"a": 1}], "total": 2, "next": "c2"}),
+            httpx.Response(200, json={"items": [{"a": 2}], "total": 2, "next": None}),
+        ]
+        with respx.mock:
+            respx.post(TOKEN_URL).mock(return_value=httpx.Response(200, json={"access_token": "t", "expires_in": 7200}))
+            route = respx.get(f"https://{BASE_URL}/p").mock(side_effect=pages)
+            items = client.fetch_all("/p", deadline=time.monotonic() + 30)
+        assert items == [{"a": 1}, {"a": 2}] and route.call_count == 2

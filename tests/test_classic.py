@@ -261,17 +261,26 @@ class TestDurability:
 
 
 class TestGroups:
-    def test_list_groups_reads_list_of_lists_and_pages(self, token_file):
+    def test_list_groups_reads_list_of_lists_until_an_empty_page(self, token_file):
         from aruba_central_mcp.classic import PATH_CONFIG_GROUPS
 
-        page1 = {"data": [[f"g{i}"] for i in range(2)], "total": 3}
-        page2 = {"data": [["g2"]], "total": 3}
+        # The server may cap the page below the requested limit: a short page is not the end.
+        pages = [{"data": [["g0"]]}, {"data": [["g1"], ["g2"]]}, {"data": []}]
         with respx.mock:
             route = respx.get(f"{BASE}{PATH_CONFIG_GROUPS}").mock(
-                side_effect=[httpx.Response(200, json=page1), httpx.Response(200, json=page2)]
+                side_effect=[httpx.Response(200, json=p) for p in pages]
             )
-            assert make(token_file).list_groups(page_size=2) == ["g0", "g1", "g2"]
-        assert route.calls[1].request.url.params["offset"] == "2"
+            assert make(token_file).list_groups() == ["g0", "g1", "g2"]
+        assert route.calls[0].request.url.params["limit"] == "20"
+        assert [c.request.url.params["offset"] for c in route.calls] == ["0", "1", "3"]
+
+    def test_list_groups_without_an_empty_page_is_an_error(self, token_file):
+        from aruba_central_mcp.classic import PATH_CONFIG_GROUPS
+
+        with respx.mock:
+            respx.get(f"{BASE}{PATH_CONFIG_GROUPS}").mock(return_value=httpx.Response(200, json={"data": [["g"]]}))
+            with pytest.raises(ClassicError, match="more than 3 pages"):
+                make(token_file).list_groups(max_pages=3)
 
     def test_list_groups_rejects_a_non_list(self, token_file):
         from aruba_central_mcp.classic import PATH_CONFIG_GROUPS
@@ -280,3 +289,30 @@ class TestGroups:
             respx.get(f"{BASE}{PATH_CONFIG_GROUPS}").mock(return_value=httpx.Response(200, json={"data": "x"}))
             with pytest.raises(ClassicError, match="not a list"):
                 make(token_file).list_groups()
+
+
+
+class TestDeadline:
+    def test_expired_deadline_refuses_the_request(self, token_file):
+        from aruba_central_mcp.classic import ClassicDeadline
+
+        with respx.mock:
+            route = respx.get(f"{BASE}{PATH_FW_SWARMS}")
+            with pytest.raises(ClassicDeadline):
+                make(token_file).get(PATH_FW_SWARMS, deadline=time.monotonic() + 0.5)
+            assert not route.called
+
+    def test_http_timeout_is_cut_to_the_remaining_time(self, token_file):
+        c = make(token_file)
+        seen = {}
+        real_get = c._http.get
+
+        def spy(url, **kwargs):
+            seen["timeout"] = kwargs.get("timeout")
+            return real_get(url, **kwargs)
+
+        c._http.get = spy
+        with respx.mock:
+            respx.get(f"{BASE}{PATH_FW_SWARMS}").mock(return_value=httpx.Response(200, json={"swarms": []}))
+            c.get(PATH_FW_SWARMS, deadline=time.monotonic() + 10)
+        assert seen["timeout"] <= 10
