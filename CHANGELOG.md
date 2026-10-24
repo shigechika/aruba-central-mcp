@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.9.0...v0.10.0) (2026-10-24)
+
+
+### Features
+
+* add firmware_status (New Central) with optional Classic Central details ([#66](https://github.com/shigechika/aruba-central-mcp/issues/66)) ([97990da](https://github.com/shigechika/aruba-central-mcp/commit/97990da58ba292f2d705a60a75120cacf339a61d))
+
 ## [0.9.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.8.0...v0.9.0) (2026-09-29)
 
 
