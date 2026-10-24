@@ -57,7 +57,7 @@
 | ツール | 用途 |
 |---|---|
 | `firmware_status(group="", site="", swarm_name="")` | スワームごとのグループ・サイト・AP のオンライン数・動作中の版・推奨の版・New Central の更新の状態。絞り込みは組み合わせ可、完全一致で大文字小文字を区別しない。Classic Central を設定すると、Classic のグループ（AOS-8 の AP には New Central のグループが無い）、グループの基準の版（未適用・古い版の印つき）とその予定時刻、Classic の状態・理由・`upgrade_required`、Classic にだけ残るスワームも出す |
-| `firmware_versions(device_type="IAP", swarm_name="")` | Classic Central が提供する版（`release` / `beta`）。`ARUBA_CLASSIC_*` を設定したときだけ登録される |
+| `firmware_versions(device_type="IAP", swarm_name="", group="", swarm_id="")` | Classic Central が提供する版（`release` / `beta`）。デバイス種別か 1 つのスワームについて。`swarm_name` が曖昧なら断る（`group` で絞るか、優先される `swarm_id` を渡す）。`ARUBA_CLASSIC_*` を設定したときだけ登録される |
 
 どちらも読み取りだけ。どの API が何を返し、公開の資料で何が分からないかは [Firmware API notes](firmware-api-notes.md)（英語）。
 

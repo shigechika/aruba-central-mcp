@@ -69,6 +69,15 @@ precedent to copy elsewhere.)
   logs a request/response containing the `Authorization` header, the client
   secret, or a raw access token — including at `DEBUG` log level.
   `ArubaClient`'s token refresh path is the highest-risk spot for this.
+- The optional Classic Central access adds `ARUBA_CLASSIC_CLIENT_SECRET` and a
+  rotating refresh token kept in the file named by `ARUBA_CLASSIC_TOKEN_FILE`.
+  `ClassicClient`'s refresh sends the client secret and refresh token as URL
+  query parameters (as the API documents), so flag anything that lets a
+  request URL reach a log (httpx/httpcore are held at WARNING with a
+  redacting filter in `classic.py`), puts a token or file content into an
+  error message or tool response, or writes the token file non-atomically
+  or with a mode other than 0600 — a lost refresh token cannot be recovered
+  without the operator re-bootstrapping it.
 - Tool inputs (MAC addresses, site/AP names, filters) come from an LLM
   acting on a user's behalf — treat them as adversarial. Check that values
   interpolated into API query parameters go through `httpx`'s params

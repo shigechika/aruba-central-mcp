@@ -14,6 +14,7 @@
 | アクセスポイント | `list_aps`、`get_ap_status`、`list_radios`、`list_bssids`、`list_wlans`、`list_swarms`、`get_ap_throughput`、`get_top_aps` |
 | クライアント | `list_clients`、`find_client_by_mac`、`get_clients_trend`、`get_top_clients_by_usage`、`get_client_mobility_trail` |
 | インフラ | `list_switches`、`get_site_summary` |
+| ファームウェア | `firmware_status`、`firmware_versions`（Classic Central を設定したときだけ） |
 | 朝のパトロール | `health_check`、`daily_brief` |
 
 **すべてのツールが読み取り専用です。** このサーバー経由で Aruba Central 側の

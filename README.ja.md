@@ -39,6 +39,7 @@
 |--------|------|
 | `list_switches` | スイッチ一覧 |
 | `get_site_summary` | サイト別集約サマリー（AP 数・クライアント数） |
+| `daily_brief` | 朝の AP の健全性チェックを 1 回で。オフラインの AP の割合がしきい値を超えたサイトを出す |
 | `health_check` | サーバーバージョンの報告と Aruba Central 認証の確認（データ取得なし） |
 
 ### ファームウェア
@@ -156,6 +157,8 @@ Windows ではプロセス間のロックが無いので 1 プロセスで使う
 
 プラグインは `uvx aruba-central-mcp` を起動し、[設定](#設定)に記載した3つの
 環境変数を読みます。Claude Code を起動する前に export しておいてください。
+任意の `ARUBA_CLASSIC_*` の 4 つもそのまま渡すので、export しておけば `firmware_status` に
+Classic の詳細が付き、`firmware_versions` も使えます。設定しなければ空で渡り、Classic は使われません。
 
 プラグインは `uvx` を起動するため、Claude Code を実行するプロセスの `PATH` に
 `uvx` が通っている必要があります。ログインシェルなら通常問題ありませんが、

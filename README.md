@@ -42,6 +42,7 @@ Documentation: <https://shigechika.github.io/aruba-central-mcp/>
 | `list_switches` | List all switches |
 | `get_site_summary` | Aggregated site-level summary (AP counts, client counts) |
 | `health_check` | Report server version and verify Aruba Central authentication (no data fetch) |
+| `daily_brief` | One-shot morning AP health check: sites whose offline-AP ratio exceeds a threshold |
 
 ### Firmware
 
@@ -163,7 +164,10 @@ the server for you:
 
 The plugin launches `uvx aruba-central-mcp` and reads the same three environment
 variables described in [Configuration](#configuration); export them before
-starting Claude Code.
+starting Claude Code. It also passes the four optional `ARUBA_CLASSIC_*`
+variables through, so `firmware_status` gets its Classic details and
+`firmware_versions` is offered when they are exported; left unset they arrive
+empty and Classic stays off.
 
 `uvx` must be on the `PATH` of the process that runs Claude Code — a login
 shell usually has it, but a GUI-launched app may not; install

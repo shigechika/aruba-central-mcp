@@ -58,7 +58,7 @@ session start or after a tool-call timeout.
 | Tool | Purpose |
 |---|---|
 | `firmware_status(group="", site="", swarm_name="")` | Per swarm: group, site, APs online/total, running versions, recommended version, New Central upgrade status. Filters combine; exact, case-insensitive. With Classic Central configured: the Classic group (New Central has none for AOS-8 APs), the group's compliance version marked pending / older, its scheduled time, Classic state, reason, `upgrade_required`, and Classic-only swarms |
-| `firmware_versions(device_type="IAP", swarm_name="")` | Versions Classic Central offers (`release` / `beta`); only registered when `ARUBA_CLASSIC_*` is set |
+| `firmware_versions(device_type="IAP", swarm_name="", group="", swarm_id="")` | Versions Classic Central offers (`release` / `beta`) for a device type or one swarm; an ambiguous `swarm_name` is refused (narrow with `group` or pass `swarm_id`, which wins). Only registered when `ARUBA_CLASSIC_*` is set |
 
 Both read only. Which API reports what, and what the published references
 leave open, is in [Firmware API notes](firmware-api-notes.md).
