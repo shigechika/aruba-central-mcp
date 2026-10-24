@@ -47,7 +47,7 @@ Documentation: <https://shigechika.github.io/aruba-central-mcp/>
 
 | Tool | Description |
 |------|-------------|
-| `firmware_status` | Per swarm: group, site, running versions, recommended version, upgrade status; filter by group, site and/or swarm. With Classic Central configured, also Classic's upgrade state and reason and each group's compliance version |
+| `firmware_status` | Per swarm: group, site, running versions, recommended version, upgrade status; filter by group, site and/or swarm. With Classic Central configured, also the Classic group, the group's compliance version (what Central upgrades the swarm to next) with its scheduled time, Classic's upgrade state and reason, and Classic-only (stale) swarms |
 | `firmware_versions` | Firmware versions Classic Central offers for a device type or one swarm (registered only when Classic Central is configured) |
 
 Every tool reads; nothing is configured or upgraded. See [docs/firmware-api-notes.md](docs/firmware-api-notes.md) for which API reports what.

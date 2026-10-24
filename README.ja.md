@@ -45,7 +45,7 @@
 
 | ツール | 説明 |
 |------|-------------|
-| `firmware_status` | スワームごとのグループ・サイト・動作中の版・推奨の版・更新の状態。グループ・サイト・スワームで絞り込める。Classic Central を設定すると、Classic の更新の状態と理由、グループの基準の版（コンプライアンス）も出す |
+| `firmware_status` | スワームごとのグループ・サイト・動作中の版・推奨の版・更新の状態。グループ・サイト・スワームで絞り込める。Classic Central を設定すると、Classic のグループ、グループの基準の版（次に Central が更新する先）とその予定時刻、Classic の更新の状態と理由、Classic にだけ残るスワームも出す |
 | `firmware_versions` | Classic Central が提供する版の一覧（デバイス種別か 1 つのスワーム）。Classic Central を設定したときだけ登録される |
 
 どのツールも読み取りだけで、設定や更新はしない。どの API が何を返すかは [docs/firmware-api-notes.md](docs/firmware-api-notes.md)。

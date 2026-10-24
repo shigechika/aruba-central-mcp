@@ -138,15 +138,60 @@ Not confirmed:
   firmware upgrade" / "Description of specific state").
 - Any "live" / upgrade-type field in `POST /firmware/v1/upgrade`. The UI's
   Live vs Standard choice has no documented counterpart in the API body.
-- Whether Classic `swarm_id` equals New Central `clusterId`. `firmware_status`
-  joins on the id and falls back to the swarm name.
+- (Now confirmed, see below: Classic `swarm_id` equals New Central `clusterId`.)
 - A site filter on any Classic firmware endpoint (none documented).
+
+## Confirmed against a live tenant (2026-10-24)
+
+- New Central AP rows carry **no `deviceGroupName`** for AOS-8 Instant APs,
+  so the group cannot come from New Central for them.
+- Classic `/firmware/v1/swarms` rows have exactly `aps_count`,
+  `device_status`, `firmware_version`, `recommended`, `status` {`state`,
+  `reason`}, `swarm_id`, `swarm_name`, `upgrade_required` -- **no group**.
+  `?group=<g>` filters correctly.
+- New Central `clusterId` **equals** Classic `swarm_id`
+  (`/firmware/v1/status?swarm_id=<clusterId>` answers for that swarm).
+- `GET /configuration/v2/groups?limit=100&offset=0` returns `data` as a list
+  of one-element lists, e.g. `[["group-a"], ["group-b"], ...]`.
+- Classic also keeps swarms with 0 APs and `device_status` Down (stale), and
+  groups with no swarms.
+
+### Compliance semantics
+
+For Classic IAP groups the upgrade is driven by the **group compliance
+version**: `GET /firmware/v1/upgrade/compliance_version?device_type=IAP&group=<g>`
+returns `firmware_compliance_version` and, only when an upgrade is scheduled,
+`compliance_scheduled_at` (epoch seconds). A site-level upgrade started in the
+UI does not change it. So "what will happen next" to a swarm is its group's
+compliance version and scheduled time. `/firmware/v1/status?swarm_id=` can
+answer "Firmware version upto date" when the swarm runs the compliance version,
+even if a newer version exists.
+
+### How firmware_status uses it
+
+- Swarm -> group map: list the Classic groups, then `/firmware/v1/swarms?group=<g>`
+  and the compliance version for each group. Cached in-process for 300 s when
+  every group was read; a call spends at most 40 s building it, and groups not
+  read (failure or time) are named in Notes and not cached.
+- The whole Classic swarm list (no group) is read once per call for state,
+  reason and `upgrade_required`.
+- Join by `swarm_id` = `clusterId`; fallback by name within the swarm's group;
+  several Classic swarms with that name are reported as ambiguous.
+- Per swarm: Classic group, the group's compliance version with
+  "matches running" or "pending: running ...", "older than running" /
+  "older than recommended ..." when it is lower (version numbers compared,
+  nothing inferred about vulnerabilities), the scheduled time as ISO 8601 UTC
+  with the server's local time, and Classic state, reason, `upgrade_required`.
+- `group=` matches the Classic group when New Central has none.
+- With no site or swarm filter, Classic swarms that New Central does not list
+  (0 APs, Down) are shown in a trailing section.
 
 ## Selectors (group / site / swarm)
 
 `firmware_status(group, site, swarm_name)`: any combination, each exact and
-case-insensitive, all must match; group from the AP's `deviceGroupName`, site
-from `siteName`, swarm from `clusterName`. APs with no cluster are listed per
+case-insensitive, all must match; group from the AP's `deviceGroupName`, or
+from Classic (swarm -> group map) when New Central has none, site from
+`siteName`, swarm from `clusterName`. APs with no cluster are listed per
 (group, site), not merged into one line.
 
 How it reads:
@@ -157,14 +202,12 @@ How it reads:
   with no filter, every AP. Not narrowed by `serialNumber in (...)`: about 15
   serials fit in 256 characters, so a swarm of 140 APs would take 10 requests
   where the unfiltered read takes one.
-- Classic: `/firmware/v1/swarms?group=<name>` and the compliance version, once
-  per distinct group of the matched APs (up to 20), with the group's exact
-  name as New Central reports it, so a filter typed in another case still
-  reaches Classic. The first Classic failure (authentication or any other)
-  is noted once and the remaining Classic calls are skipped; the New Central
-  part of the answer is kept.
-- Join: Classic `swarm_id` = New Central `clusterId` when they match; otherwise
-  by (group, swarm name). Several Classic swarms with that name are reported
+- Classic: see "How firmware_status uses it" above (group map per Classic
+  group, cached; the whole swarm list once per call). An authentication
+  failure stops every Classic call of that call; a failure in one group only
+  leaves that group unread. The New Central part of the answer is kept.
+- Join: Classic `swarm_id` = New Central `clusterId`; otherwise by swarm name
+  within the swarm's group. Several Classic swarms with that name are reported
   as ambiguous, never picked. `firmware_versions` refuses an ambiguous
   `swarm_name` and takes `group` or `swarm_id` instead.
 

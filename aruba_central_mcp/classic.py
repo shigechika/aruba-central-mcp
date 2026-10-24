@@ -41,6 +41,7 @@ PATH_FW_SWARMS = "/firmware/v1/swarms"
 PATH_FW_VERSIONS = "/firmware/v1/versions"
 PATH_FW_STATUS = "/firmware/v1/status"
 PATH_FW_COMPLIANCE = "/firmware/v1/upgrade/compliance_version"
+PATH_CONFIG_GROUPS = "/configuration/v2/groups"
 
 #: Refresh this many seconds before the access token's stated expiry.
 EXPIRY_MARGIN = 120
@@ -328,6 +329,24 @@ class ClassicClient:
                 raise ClassicError(f"Classic API error ({path}): response is not a JSON object")
             return body
         raise ClassicError(f"Classic API error ({path}): unauthorized after refresh")  # pragma: no cover
+
+    def list_groups(self, page_size: int = 100, max_pages: int = 50) -> list[str]:
+        """Every Classic group name. ``data`` is a list of one-element lists, e.g. ``[["group-a"], ["group-b"]]``."""
+        names: list[str] = []
+        offset = 0
+        for _ in range(max_pages):
+            doc = self.get(PATH_CONFIG_GROUPS, {"limit": page_size, "offset": offset})
+            rows = doc.get("data") or []
+            if not isinstance(rows, list):
+                raise ClassicError(f"Classic API error ({PATH_CONFIG_GROUPS}): data is not a list")
+            for row in rows:
+                name = row[0] if isinstance(row, list) and row else row
+                if isinstance(name, str) and name:
+                    names.append(name)
+            if len(rows) < page_size:
+                break
+            offset += len(rows)
+        return names
 
     def list_swarms(self, group: str = "", page_size: int = 1000, max_pages: int = 20) -> list[dict]:
         """Every swarm of ``/firmware/v1/swarms`` (optionally one group), following offset paging."""

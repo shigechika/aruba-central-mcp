@@ -258,3 +258,25 @@ class TestDurability:
         monkeypatch.setattr("builtins.open", fake_open)
         with pytest.raises(ClassicError, match="lock file"):
             c.access_token()
+
+
+class TestGroups:
+    def test_list_groups_reads_list_of_lists_and_pages(self, token_file):
+        from aruba_central_mcp.classic import PATH_CONFIG_GROUPS
+
+        page1 = {"data": [[f"g{i}"] for i in range(2)], "total": 3}
+        page2 = {"data": [["g2"]], "total": 3}
+        with respx.mock:
+            route = respx.get(f"{BASE}{PATH_CONFIG_GROUPS}").mock(
+                side_effect=[httpx.Response(200, json=page1), httpx.Response(200, json=page2)]
+            )
+            assert make(token_file).list_groups(page_size=2) == ["g0", "g1", "g2"]
+        assert route.calls[1].request.url.params["offset"] == "2"
+
+    def test_list_groups_rejects_a_non_list(self, token_file):
+        from aruba_central_mcp.classic import PATH_CONFIG_GROUPS
+
+        with respx.mock:
+            respx.get(f"{BASE}{PATH_CONFIG_GROUPS}").mock(return_value=httpx.Response(200, json={"data": "x"}))
+            with pytest.raises(ClassicError, match="not a list"):
+                make(token_file).list_groups()

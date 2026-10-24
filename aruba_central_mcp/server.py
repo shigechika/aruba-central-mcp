@@ -17,6 +17,7 @@ import functools
 import inspect
 import os
 import re
+import time
 from typing import Optional
 
 from mcp.server.mcpserver import MCPServer
@@ -131,6 +132,7 @@ def _reset_client() -> None:
     if _classic is not None:
         _classic.close()
     _classic = None
+    _reset_classic_cache()
 
 
 CLASSIC_ENV = (
@@ -713,20 +715,83 @@ def _top(counter: collections.Counter) -> str:
 
 
 def _epoch_text(value: object) -> str:
-    """An epoch timestamp (seconds, or milliseconds when it is that large) as UTC text; the raw value otherwise."""
+    """An epoch timestamp (seconds, or milliseconds when that large) as ISO 8601 UTC with the server's local time.
+
+    Returns "" for a missing or non-positive value, and the raw value when it cannot be converted.
+    """
     if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
         return ""
     seconds = value / 1000 if value > 1e11 else value
     try:
-        return datetime.datetime.fromtimestamp(seconds, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+        utc = datetime.datetime.fromtimestamp(seconds, datetime.timezone.utc)
+        local = utc.astimezone().strftime("%Y-%m-%d %H:%M %Z").strip()
     except (ValueError, OverflowError, OSError):
         return str(value)
+    return f"{utc.isoformat(timespec='seconds')} (local {local})"
+
+
+def _version_key(version: str) -> tuple:
+    """Numeric parts of an AOS version before the build suffix, for ordering ("8.10.0.24_97188" -> (8, 10, 0, 24))."""
+    return tuple(int(n) for n in re.findall(r"\d+", (version or "").split("_")[0]))
 
 
 #: Longest OData filter the firmware-details endpoint accepts.
 FILTER_MAX_LEN = 256
-#: Groups whose Classic swarms are read in one firmware_status call.
-MAX_CLASSIC_GROUPS = 20
+#: Seconds a Classic group map (swarm -> group, group compliance) is reused within one process.
+CLASSIC_CACHE_TTL = 300
+#: Seconds one firmware_status call may spend building the Classic group map.
+CLASSIC_BUDGET_SECONDS = 40
+#: Classic-only swarms listed at most.
+MAX_CLASSIC_ONLY = 30
+
+_classic_cache: dict = {"at": 0.0, "value": None}
+
+
+def _reset_classic_cache() -> None:
+    _classic_cache.update(at=0.0, value=None)
+
+
+def _classic_group_map(classic: ClassicClient, deadline: float) -> dict:
+    """swarm_id -> group and each group's compliance, from Classic (cached CLASSIC_CACHE_TTL when complete).
+
+    The swarm rows of /firmware/v1/swarms carry no group, so the map is built by
+    listing the groups (/configuration/v2/groups) and asking /firmware/v1/swarms
+    per group. A group that fails or is not reached before ``deadline`` lands in
+    ``unread`` (with its reason in ``errors``); a partial map is not cached.
+    ClassicAuthError propagates: nothing more can be read.
+    """
+    now = time.monotonic()
+    cached = _classic_cache["value"]
+    if cached is not None and now - _classic_cache["at"] < CLASSIC_CACHE_TTL:
+        return {**cached, "cached": True, "age": int(now - _classic_cache["at"])}
+    groups = classic.list_groups()
+    swarm_group: dict[str, str] = {}
+    compliance: dict[str, dict] = {}
+    unread: list[str] = []
+    errors: dict[str, str] = {}
+    for i, g in enumerate(groups):
+        if time.monotonic() > deadline:
+            unread.extend(groups[i:])
+            errors.update({u: "time budget used up" for u in groups[i:]})
+            break
+        try:
+            for cs in classic.list_swarms(group=g):
+                if cs.get("swarm_id"):
+                    swarm_group[cs["swarm_id"]] = g
+            doc = classic.get(PATH_FW_COMPLIANCE, {"device_type": "IAP", "group": g})
+            compliance[g] = {
+                "version": doc.get("firmware_compliance_version") or "",
+                "scheduled_at": doc.get("compliance_scheduled_at"),
+            }
+        except ClassicAuthError:
+            raise
+        except CLASSIC_FAILURES as e:
+            unread.append(g)
+            errors[g] = str(e) or type(e).__name__
+    value = {"groups": groups, "swarm_group": swarm_group, "compliance": compliance, "unread": unread, "errors": errors}
+    if not unread:
+        _classic_cache.update(at=time.monotonic(), value=value)
+    return {**value, "cached": False, "age": 0}
 
 
 def _in_filter(field: str, values: list[str]) -> Optional[str]:
@@ -736,11 +801,11 @@ def _in_filter(field: str, values: list[str]) -> Optional[str]:
     return f"{field} in (" + ",".join(f"'{_odata_literal(v)}'" for v in values) + ")"
 
 
-def _swarm_key(ap: dict) -> tuple:
+def _swarm_key(ap: dict, group: str) -> tuple:
     if ap.get("clusterId") or ap.get("clusterName"):
         return ("swarm", ap.get("clusterId") or "", ap.get("clusterName") or "")
     # APs without a cluster are grouped by where they are, never all together.
-    return ("none", ap.get("deviceGroupName") or "", ap.get("siteName") or "")
+    return ("none", group, ap.get("siteName") or "")
 
 
 def _swarm_label(key: tuple) -> str:
@@ -749,45 +814,109 @@ def _swarm_label(key: tuple) -> str:
     return f"(no swarm: group={key[1] or '-'} site={key[2] or '-'})"
 
 
+def _compliance_text(comp: Optional[dict], running: collections.Counter, recommended: collections.Counter) -> str:
+    """'compliance=V (...)' comparing the group's compliance version with what runs and what is recommended."""
+    if comp is None:
+        return "compliance=unknown"
+    version = comp.get("version") or ""
+    if not version:
+        return "compliance=none"
+    marks = []
+    if set(running) == {version}:
+        marks.append("matches running")
+    else:
+        marks.append(f"pending: running {_top(running)}")
+        if running and _version_key(version) < max(_version_key(v) for v in running):
+            marks.append("older than running")
+    if recommended:
+        rec = recommended.most_common(1)[0][0]
+        if _version_key(version) < _version_key(rec):
+            marks.append(f"older than recommended {rec}")
+    when = _epoch_text(comp.get("scheduled_at"))
+    return f"compliance={version} ({'; '.join(marks)})" + (f" scheduled={when}" if when else "")
+
+
 @mcp.tool()
 def firmware_status(group: str = "", site: str = "", swarm_name: str = "") -> str:
     """Firmware of every AP swarm (cluster): running versions, upgrade status, group and site.
 
-    Use this to see which swarms still need a firmware upgrade and whether a
-    triggered upgrade is progressing or failed. Read-only.
+    Use this to see which swarms still need a firmware upgrade and what Central
+    will do next. Read-only.
 
-    One line per swarm with its group(s) and site(s) (from the APs), AP count
-    and how many are online, the running versions with AP counts, the
-    recommended version and New Central's per-AP upgrade status
-    (/network-services/v1/firmware-details). APs that belong to no swarm are
-    listed per group and site. When Classic Central is configured
-    (ARUBA_CLASSIC_*), each swarm also gets Classic's upgrade ``state``,
-    ``reason`` (why an upgrade failed or is pending), ``scheduled_at`` and
-    ``upgrade_required`` (/firmware/v1/swarms, read per group), and each group
-    its Classic compliance version (the version Central keeps the group on).
-    A swarm name that matches several Classic swarms is marked ambiguous
-    rather than guessed. A Classic failure is reported under Notes and stops
-    the remaining Classic calls; the New Central data is still shown.
+    One line per swarm with its group(s) and site(s), AP count and how many are
+    online, the running versions with AP counts, the recommended version and
+    New Central's per-AP upgrade status (/network-services/v1/firmware-details).
+    APs that belong to no swarm are listed per group and site.
+
+    When Classic Central is configured (ARUBA_CLASSIC_*), each swarm also gets
+    its Classic group, the group's compliance version (the version Central
+    keeps the group's swarms on: an upgrade of a Classic IAP group happens when
+    the compliance version changes, and ``scheduled`` is when that is set to
+    run; a site-level upgrade in the UI does not change it), marked "pending"
+    when the swarm does not run it yet and "older than ..." when it is lower
+    than the running or recommended version, plus Classic's upgrade ``state``,
+    ``reason`` and ``upgrade_required``. New Central reports no group for
+    AOS-8 APs, so the group comes from Classic (cached for a few minutes).
+    Swarms Classic knows but New Central does not (e.g. 0 APs, Down) are listed
+    at the end when no site or swarm filter is given. A Classic failure is
+    reported under Notes; the New Central data is still shown.
 
     Filters combine (all must match); each is an exact name, case-insensitive.
-    Empty means no filter.
+    Empty means no filter. ``group`` uses the Classic group when New Central has none.
 
     Args:
-        group: Central group name (the AP's group).
+        group: Central group name.
         site: Site name.
         swarm_name: Swarm (cluster) name.
     """
     client = _get_client()
+    all_aps = client.fetch_all(PATH_APS)
+    notes: list[str] = []
+
+    classic = _get_classic()
+    missing = classic_missing()
+    if missing:
+        notes.append(f"Classic Central partly configured (missing: {', '.join(missing)}); Classic columns skipped")
+    cmap: Optional[dict] = None
+    classic_swarms: Optional[list[dict]] = None
+    if classic is not None:
+        if classic.persist_error:
+            notes.append(f"Classic Central: {classic.persist_error}")
+        try:
+            cmap = _classic_group_map(classic, time.monotonic() + CLASSIC_BUDGET_SECONDS)
+            classic_swarms = classic.list_swarms()
+        except CLASSIC_FAILURES as e:
+            kind = "authentication" if isinstance(e, ClassicAuthError) else "request"
+            notes.append(f"Classic Central {kind} failed: {str(e) or type(e).__name__}; Classic columns skipped")
+            cmap, classic_swarms = None, None
+        if cmap is not None:
+            if cmap["unread"]:
+                detail = ", ".join(f"{g} ({cmap['errors'].get(g, '?')})" for g in cmap["unread"][:10])
+                notes.append(
+                    f"Classic groups not read ({len(cmap['unread'])} of {len(cmap['groups'])}): {detail}; "
+                    "their swarms show no Classic group"
+                )
+            if cmap.get("cached"):
+                notes.append(f"Classic group map from cache ({cmap['age']} s old)")
+    swarm_group = cmap["swarm_group"] if cmap else {}
+
+    def ap_group(ap: dict) -> str:
+        return ap.get("deviceGroupName") or swarm_group.get(ap.get("clusterId") or "", "")
+
     aps = [
-        ap for ap in client.fetch_all(PATH_APS)
-        if _matches(ap.get("deviceGroupName"), group)
+        ap for ap in all_aps
+        if _matches(ap_group(ap), group)
         and _matches(ap.get("siteName"), site)
         and _matches(ap.get("clusterName"), swarm_name)
     ]
     if not aps:
+        if group and not any(ap.get("deviceGroupName") for ap in all_aps) and cmap is None:
+            return (
+                "No swarms matched. New Central reports no group for these APs; "
+                "configure Classic Central (ARUBA_CLASSIC_*) to filter by group."
+            )
         return "No swarms matched."
 
-    notes: list[str] = []
     # With a filter, narrow the firmware-details read to the matched APs' sites
     # when the expression fits the endpoint's limit; otherwise read every AP.
     fw_filter = "deviceType eq 'ACCESS_POINT'"
@@ -806,7 +935,8 @@ def firmware_status(group: str = "", site: str = "", swarm_name: str = "") -> st
 
     swarms: dict[tuple, dict] = {}
     for ap in aps:
-        key = _swarm_key(ap)
+        g = ap_group(ap)
+        key = _swarm_key(ap, g)
         sw = swarms.setdefault(
             key,
             {
@@ -825,8 +955,8 @@ def firmware_status(group: str = "", site: str = "", swarm_name: str = "") -> st
         sw["aps"] += 1
         if (ap.get("status") or "").upper() == "ONLINE":
             sw["online"] += 1
-        if ap.get("deviceGroupName"):
-            sw["groups"][ap["deviceGroupName"]] += 1
+        if g:
+            sw["groups"][g] += 1
         if ap.get("siteName"):
             sw["sites"][ap["siteName"]] += 1
         detail = fw_by_serial.get(ap.get("serialNumber") or "", {})
@@ -838,80 +968,98 @@ def firmware_status(group: str = "", site: str = "", swarm_name: str = "") -> st
         if detail.get("upgradeStatus"):
             sw["upgrade"][detail["upgradeStatus"]] += 1
 
-    classic = _get_classic()
-    classic_by_id: dict[str, dict] = {}
-    classic_by_name: dict[tuple, list[dict]] = collections.defaultdict(list)
-    compliance: dict[str, str] = {}
-    classic_down = False
-    missing = classic_missing()
-    if missing:
-        notes.append(f"Classic Central partly configured (missing: {', '.join(missing)}); Classic columns skipped")
-    if classic is not None:
-        if classic.persist_error:
-            notes.append(f"Classic Central: {classic.persist_error}")
-        # Classic is asked per group, with the group's exact name as New Central reports it.
-        groups = sorted({g for sw in swarms.values() for g in sw["groups"]})
-        if len(groups) > MAX_CLASSIC_GROUPS:
-            notes.append(f"Classic data read for the first {MAX_CLASSIC_GROUPS} of {len(groups)} groups; pass group=")
-        for g in groups[:MAX_CLASSIC_GROUPS]:
-            try:
-                for cs in classic.list_swarms(group=g):
-                    if cs.get("swarm_id"):
-                        classic_by_id[cs["swarm_id"]] = cs
-                    if cs.get("swarm_name"):
-                        classic_by_name[(g.lower(), cs["swarm_name"].lower())].append(cs)
-                doc = classic.get(PATH_FW_COMPLIANCE, {"device_type": "IAP", "group": g})
-                version = doc.get("firmware_compliance_version") or "none"
-                when = _epoch_text(doc.get("compliance_scheduled_at"))
-                compliance[g] = version + (f" (scheduled {when})" if when else "")
-            except CLASSIC_FAILURES as e:
-                kind = "authentication" if isinstance(e, ClassicAuthError) else "request"
-                reason = str(e) or type(e).__name__
-                notes.append(f"Classic Central {kind} failed at group {g}: {reason}; remaining Classic calls skipped")
-                classic_down = True
-                break
+    by_id: dict[str, dict] = {}
+    by_name: dict[str, list[dict]] = collections.defaultdict(list)
+    for cs in classic_swarms or []:
+        if cs.get("swarm_id"):
+            by_id[cs["swarm_id"]] = cs
+        if cs.get("swarm_name"):
+            by_name[cs["swarm_name"].lower()].append(cs)
 
     total_aps = sum(sw["aps"] for sw in swarms.values())
     filters = ", ".join(f"{k}={v}" for k, v in (("group", group), ("site", site), ("swarm", swarm_name)) if v)
     lines = [f"# Firmware Status ({len(swarms)} swarms, {total_aps} APs)" + (f" [{filters}]" if filters else ""), ""]
+    joined: set[str] = set()
+    shown_groups: set[str] = set()
     for sw in sorted(swarms.values(), key=lambda x: (x["name"].lower(), x["id"])):
+        shown_groups.update(sw["groups"])
         line = (
             f"- **{sw['name']}** id={sw['id']} group={_top(sw['groups'])} site={_top(sw['sites'])} "
             f"aps={sw['online']}/{sw['aps']} online fw={_top(sw['versions'])} "
             f"recommended={_top(sw['recommended'])} upgrade_status={_top(sw['upgrade'])}"
         )
-        if classic is not None and not classic_down and sw["key"][0] == "swarm":
-            line += _classic_column(sw, classic_by_id, classic_by_name)
+        if classic_swarms is not None and sw["key"][0] == "swarm":
+            column, cs = _classic_column(sw, by_id, by_name, cmap or {})
+            if cs is not None and cs.get("swarm_id"):
+                joined.add(cs["swarm_id"])
+            line += column
         lines.append(line)
-    if compliance:
-        lines += ["", "## Group compliance (Classic, IAP)"]
-        lines += [f"- {g}: {v}" for g, v in compliance.items()]
+
+    if cmap is not None and cmap["compliance"]:
+        listed = sorted(cmap["compliance"]) if not (group or site or swarm_name) else sorted(
+            g for g in cmap["compliance"] if g in shown_groups
+        )
+        if listed:
+            lines += ["", "## Group compliance (Classic, IAP)"]
+            for g in listed:
+                comp = cmap["compliance"][g]
+                when = _epoch_text(comp.get("scheduled_at"))
+                lines.append(f"- {g}: {comp.get('version') or 'none'}" + (f" scheduled={when}" if when else ""))
+
+    if classic_swarms is not None and not (site or swarm_name):
+        extra = [
+            cs for cs in classic_swarms
+            if cs.get("swarm_id") not in joined
+            and not any(cs.get("swarm_id") == sw["id"] for sw in swarms.values())
+            and _matches(swarm_group.get(cs.get("swarm_id") or "", ""), group)
+        ]
+        if extra:
+            lines += ["", f"## Classic-only swarms ({len(extra)}; not seen in New Central, e.g. 0 APs or Down)"]
+            for cs in extra[:MAX_CLASSIC_ONLY]:
+                lines.append(
+                    f"- {cs.get('swarm_name') or '?'} id={cs.get('swarm_id') or ''} "
+                    f"group={swarm_group.get(cs.get('swarm_id') or '', '-') or '-'} aps={cs.get('aps_count')} "
+                    f"device_status={cs.get('device_status') or '-'} fw={cs.get('firmware_version') or '-'}"
+                )
+            if len(extra) > MAX_CLASSIC_ONLY:
+                lines.append(f"- ... {len(extra) - MAX_CLASSIC_ONLY} more")
     if notes:
         lines += ["", "## Notes"] + [f"- {n}" for n in notes]
     return "\n".join(lines)
 
 
-def _classic_column(sw: dict, by_id: dict[str, dict], by_name: dict[tuple, list[dict]]) -> str:
-    """The Classic part of one swarm line: joined by id, else by (group, name) when that is unique."""
+def _classic_column(sw: dict, by_id: dict[str, dict], by_name: dict[str, list[dict]], cmap: dict) -> tuple:
+    """(text, joined Classic swarm or None) for one swarm line.
+
+    Joined by swarm_id (New Central clusterId equals Classic swarm_id); otherwise by
+    name within the swarm's group, and several matches are reported, not picked.
+    """
+    swarm_group = cmap.get("swarm_group", {})
     cs = by_id.get(sw["id"]) if sw["id"] else None
     if cs is None:
-        name = sw["key"][2].lower()
+        groups = {g.lower() for g in sw["groups"]}
         candidates = {}
-        for g in sw["groups"]:
-            for c in by_name.get((g.lower(), name), []):
-                candidates[c.get("swarm_id") or id(c)] = c
+        for c in by_name.get(sw["key"][2].lower(), []):
+            cg = swarm_group.get(c.get("swarm_id") or "", "")
+            if groups and cg and cg.lower() not in groups:
+                continue
+            candidates[c.get("swarm_id") or id(c)] = c
         if len(candidates) > 1:
-            return f" | classic: ambiguous ({len(candidates)} swarms named {sw['key'][2]})"
+            return f" | classic: ambiguous ({len(candidates)} swarms named {sw['key'][2]})", None
         cs = next(iter(candidates.values()), None)
     if not cs:
-        return " | classic: not found in /firmware/v1/swarms"
+        return " | classic: not found in /firmware/v1/swarms", None
+    g = swarm_group.get(cs.get("swarm_id") or "") or (sw["groups"].most_common(1)[0][0] if sw["groups"] else "")
+    comp = cmap.get("compliance", {}).get(g) if g else None
     st = cs.get("status") if isinstance(cs.get("status"), dict) else {}
     when = _epoch_text(st.get("firmware_scheduled_at"))
-    return (
-        f" | classic: state={st.get('state') or '-'} reason={st.get('reason') or '-'}"
-        + (f" scheduled_at={when}" if when else "")
-        + f" upgrade_required={cs.get('upgrade_required')} recommended={cs.get('recommended') or '-'}"
+    text = (
+        f" | classic: group={g or '-'} {_compliance_text(comp, sw['versions'], sw['recommended'])}"
+        f" state={st.get('state') or '-'} reason={st.get('reason') or '-'}"
+        + (f" swarm_scheduled={when}" if when else "")
+        + f" upgrade_required={cs.get('upgrade_required')}"
     )
+    return text, cs
 
 
 def firmware_versions(device_type: str = "IAP", swarm_name: str = "", group: str = "", swarm_id: str = "") -> str:
