@@ -1,13 +1,17 @@
 """MCP server exposing Aruba Central device and client status.
 
 Provides read-only tools for querying Aruba Central via the
-GreenLake New Central API (/network-monitoring/v1/).
+GreenLake New Central API (/network-monitoring/v1/, /network-services/v1/).
+When ARUBA_CLASSIC_* is set, firmware tools also read the Classic Central
+API (/firmware/v1/) for what New Central does not report (upgrade state with
+its reason, group compliance version, available versions).
 
 STDIO transport is used for JSON-RPC communication.
 """
 
 from __future__ import annotations
 
+import collections
 import datetime
 import functools
 import inspect
@@ -20,6 +24,12 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 
 from aruba_central_mcp import __version__
+from aruba_central_mcp.classic import (
+    PATH_FW_COMPLIANCE,
+    PATH_FW_VERSIONS,
+    ClassicClient,
+    ClassicError,
+)
 from aruba_central_mcp.client import (
     ArubaAPIError,
     ArubaClient,
@@ -29,6 +39,7 @@ from aruba_central_mcp.client import (
     PATH_CLIENTS,
     PATH_CLIENTS_TOPN_USAGE,
     PATH_CLIENTS_TREND,
+    PATH_FIRMWARE_DETAILS,
     PATH_RADIOS,
     PATH_SWITCHES,
     PATH_SWARMS,
@@ -112,10 +123,39 @@ def _get_client() -> ArubaClient:
 
 def _reset_client() -> None:
     """Reset the shared client (for testing)."""
-    global _client
+    global _client, _classic
     if _client is not None:
         _client.close()
     _client = None
+    if _classic is not None:
+        _classic.close()
+    _classic = None
+
+
+CLASSIC_ENV = (
+    "ARUBA_CLASSIC_BASE_URL",
+    "ARUBA_CLASSIC_CLIENT_ID",
+    "ARUBA_CLASSIC_CLIENT_SECRET",
+    "ARUBA_CLASSIC_TOKEN_FILE",
+)
+
+_classic: ClassicClient | None = None
+
+
+def classic_configured() -> bool:
+    """True when every ARUBA_CLASSIC_* variable is set (the Classic tools are offered only then)."""
+    return all(os.environ.get(name) for name in CLASSIC_ENV)
+
+
+def _get_classic() -> ClassicClient | None:
+    """The shared Classic Central client, or None when ARUBA_CLASSIC_* is incomplete."""
+    global _classic
+    if _classic is not None:
+        return _classic
+    if not classic_configured():
+        return None
+    _classic = ClassicClient(*(os.environ[name] for name in CLASSIC_ENV))
+    return _classic
 
 
 # A MAC is 12 hex digits, or 6 colon-separated hex octets (dashes are
@@ -182,8 +222,11 @@ def health_check() -> dict:
 
     Always returns the same keys: ``status`` (healthy / degraded / error),
     ``service``, ``version``, ``base_url`` (the configured
-    ARUBA_CENTRAL_BASE_URL, empty string if unset), and ``auth`` (ok / error /
-    missing-env). On a degraded or error result, ``detail`` carries the reason.
+    ARUBA_CENTRAL_BASE_URL, empty string if unset), ``auth`` (ok / error /
+    missing-env) and ``classic`` (not-configured / ok / error: the optional
+    Classic Central token used by the firmware tools; ``error`` also makes the
+    status degraded and adds ``classic_detail``). On a degraded or error
+    result, ``detail`` carries the reason.
     """
 
     # Fixed shape: every key is present regardless of outcome, so callers can
@@ -194,6 +237,7 @@ def health_check() -> dict:
         "version": __version__,
         "base_url": os.environ.get("ARUBA_CENTRAL_BASE_URL", ""),
         "auth": "unknown",
+        "classic": "not-configured",
     }
 
     # Backend: build the client and obtain an OAuth2 token. Reuse the cached
@@ -213,6 +257,19 @@ def health_check() -> dict:
         result["status"] = "degraded"
         result["auth"] = "error"
         result["detail"] = f"Aruba Central error: {e}"
+
+    # Optional Classic Central access (firmware tools). Probed only when configured;
+    # a failure degrades the server but never hides the New Central result above.
+    classic = _get_classic()
+    if classic is not None:
+        try:
+            classic.access_token()
+            result["classic"] = "ok"
+        except ClassicError as e:
+            result["classic"] = "error"
+            if result["status"] == "healthy":
+                result["status"] = "degraded"
+            result["classic_detail"] = str(e)
 
     return result
 
@@ -612,6 +669,211 @@ def list_swarms(site: str = "") -> str:
 
     header = f"# Swarms ({len(items)} total)\n\n"
     return header + "\n".join(_format_swarm(s) for s in items)
+
+
+# -- firmware ------------------------------------------------------------------
+
+#: Device types the Classic firmware API accepts.
+CLASSIC_DEVICE_TYPES = ("IAP", "MAS", "HP", "CX", "CONTROLLER")
+#: Groups whose Classic compliance version is looked up in one firmware_status call.
+MAX_COMPLIANCE_GROUPS = 10
+
+
+def _matches(value: str, wanted: str) -> bool:
+    """Exact, case-insensitive name match; an empty ``wanted`` matches everything."""
+    return not wanted or (value or "").strip().lower() == wanted.strip().lower()
+
+
+def _top(counter: collections.Counter) -> str:
+    """'a(3), b(1)' for a counter, most common first; '-' when empty."""
+    return ", ".join(f"{k}({n})" for k, n in counter.most_common()) if counter else "-"
+
+
+def _epoch_text(value: object) -> str:
+    if isinstance(value, (int, float)) and value > 0:
+        return datetime.datetime.fromtimestamp(value, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    return ""
+
+
+@mcp.tool()
+def firmware_status(group: str = "", site: str = "", swarm_name: str = "") -> str:
+    """Firmware of every AP swarm (cluster): running versions, upgrade status, group and site.
+
+    Use this to see which swarms still need a firmware upgrade and whether a
+    triggered upgrade is progressing or failed. Read-only.
+
+    One line per swarm with its group(s) and site(s) (from the APs), AP count
+    and how many are online, the running versions with AP counts, the
+    recommended version and New Central's per-AP upgrade status
+    (/network-services/v1/firmware-details). When Classic Central is configured
+    (ARUBA_CLASSIC_*), each swarm also gets Classic's upgrade ``state``,
+    ``reason`` (why an upgrade failed or is pending), ``scheduled_at`` and
+    ``upgrade_required`` (/firmware/v1/swarms), and each group its Classic
+    compliance version (the version Central keeps the group on).
+
+    Filters combine (all must match); each is an exact name, case-insensitive.
+    Empty means no filter.
+
+    Args:
+        group: Central group name (the AP's group).
+        site: Site name.
+        swarm_name: Swarm (cluster) name.
+    """
+    client = _get_client()
+    aps = [
+        ap for ap in client.fetch_all(PATH_APS)
+        if _matches(ap.get("deviceGroupName"), group)
+        and _matches(ap.get("siteName"), site)
+        and _matches(ap.get("clusterName"), swarm_name)
+    ]
+    if not aps:
+        return "No swarms matched."
+
+    notes: list[str] = []
+    fw_by_serial: dict[str, dict] = {}
+    try:
+        for item in client.fetch_all(PATH_FIRMWARE_DETAILS, params={"filter": "deviceType eq 'ACCESS_POINT'"}):
+            if item.get("serialNumber"):
+                fw_by_serial[item["serialNumber"]] = item
+    except ArubaClientError as e:
+        notes.append(f"New Central firmware details unavailable: {e}")
+
+    swarms: dict[str, dict] = {}
+    for ap in aps:
+        key = ap.get("clusterId") or ap.get("clusterName") or "(no swarm)"
+        sw = swarms.setdefault(
+            key,
+            {
+                "name": ap.get("clusterName") or "(no swarm)",
+                "id": ap.get("clusterId") or "",
+                "groups": collections.Counter(),
+                "sites": collections.Counter(),
+                "aps": 0,
+                "online": 0,
+                "versions": collections.Counter(),
+                "recommended": collections.Counter(),
+                "upgrade": collections.Counter(),
+            },
+        )
+        sw["aps"] += 1
+        if (ap.get("status") or "").upper() == "ONLINE":
+            sw["online"] += 1
+        if ap.get("deviceGroupName"):
+            sw["groups"][ap["deviceGroupName"]] += 1
+        if ap.get("siteName"):
+            sw["sites"][ap["siteName"]] += 1
+        detail = fw_by_serial.get(ap.get("serialNumber") or "", {})
+        version = detail.get("firmwareVersion") or ap.get("firmwareVersion")
+        if version:
+            sw["versions"][version] += 1
+        if detail.get("recommendedVersion"):
+            sw["recommended"][detail["recommendedVersion"]] += 1
+        if detail.get("upgradeStatus"):
+            sw["upgrade"][detail["upgradeStatus"]] += 1
+
+    classic_by_id: dict[str, dict] = {}
+    classic_by_name: dict[str, dict] = {}
+    compliance: dict[str, str] = {}
+    classic = _get_classic()
+    if classic is not None:
+        try:
+            for cs in classic.list_swarms(group=group):
+                if cs.get("swarm_id"):
+                    classic_by_id[cs["swarm_id"]] = cs
+                if cs.get("swarm_name"):
+                    classic_by_name[cs["swarm_name"].lower()] = cs
+        except ClassicError as e:
+            notes.append(f"Classic Central swarm firmware unavailable: {e}")
+        groups = sorted({g for sw in swarms.values() for g in sw["groups"]})
+        for g in groups[:MAX_COMPLIANCE_GROUPS]:
+            try:
+                doc = classic.get(PATH_FW_COMPLIANCE, {"device_type": "IAP", "group": g})
+                version = doc.get("firmware_compliance_version") or "none"
+                when = _epoch_text(doc.get("compliance_scheduled_at"))
+                compliance[g] = version + (f" (scheduled {when})" if when else "")
+            except ClassicError as e:
+                compliance[g] = f"unavailable: {e}"
+        if len(groups) > MAX_COMPLIANCE_GROUPS:
+            notes.append(
+                f"compliance shown for the first {MAX_COMPLIANCE_GROUPS} of {len(groups)} groups; "
+                "pass group= for the others"
+            )
+
+    total_aps = sum(sw["aps"] for sw in swarms.values())
+    filters = ", ".join(f"{k}={v}" for k, v in (("group", group), ("site", site), ("swarm", swarm_name)) if v)
+    lines = [f"# Firmware Status ({len(swarms)} swarms, {total_aps} APs)" + (f" [{filters}]" if filters else ""), ""]
+    for sw in sorted(swarms.values(), key=lambda x: (x["name"].lower(), x["id"])):
+        line = (
+            f"- **{sw['name']}** id={sw['id']} group={_top(sw['groups'])} site={_top(sw['sites'])} "
+            f"aps={sw['online']}/{sw['aps']} online fw={_top(sw['versions'])} "
+            f"recommended={_top(sw['recommended'])} upgrade_status={_top(sw['upgrade'])}"
+        )
+        if classic is not None:
+            cs = classic_by_id.get(sw["id"]) or classic_by_name.get(sw["name"].lower())
+            if cs:
+                st = cs.get("status") if isinstance(cs.get("status"), dict) else {}
+                when = _epoch_text(st.get("firmware_scheduled_at"))
+                line += (
+                    f" | classic: state={st.get('state') or '-'} reason={st.get('reason') or '-'}"
+                    + (f" scheduled_at={when}" if when else "")
+                    + f" upgrade_required={cs.get('upgrade_required')} recommended={cs.get('recommended') or '-'}"
+                )
+            else:
+                line += " | classic: not found in /firmware/v1/swarms"
+        lines.append(line)
+    if compliance:
+        lines += ["", "## Group compliance (Classic, IAP)"]
+        lines += [f"- {g}: {v}" for g, v in compliance.items()]
+    if notes:
+        lines += ["", "## Notes"] + [f"- {n}" for n in notes]
+    return "\n".join(lines)
+
+
+def firmware_versions(device_type: str = "IAP", swarm_name: str = "") -> str:
+    """Firmware versions Classic Central offers for a device type or one swarm.
+
+    Read-only (/firmware/v1/versions). Registered only when Classic Central is
+    configured (ARUBA_CLASSIC_*). Pick the target version of an upgrade from
+    this list; release_status "beta" marks a version not yet released.
+
+    Args:
+        device_type: One of IAP (Instant AP swarms), MAS, HP, CX, CONTROLLER.
+        swarm_name: Optional swarm (cluster) name, exact and case-insensitive;
+            when given, the versions supported by that swarm are listed instead.
+    """
+    classic = _get_classic()
+    if classic is None:
+        raise ValueError("Classic Central is not configured (set ARUBA_CLASSIC_*).")
+    device_type = (device_type or "").strip().upper()
+    if device_type not in CLASSIC_DEVICE_TYPES:
+        raise ValueError(f"device_type must be one of {', '.join(CLASSIC_DEVICE_TYPES)}")
+    params: dict = {"device_type": device_type}
+    label = f"device_type={device_type}"
+    if swarm_name:
+        found = [s for s in classic.list_swarms() if _matches(s.get("swarm_name"), swarm_name)]
+        if not found:
+            return f"No swarm named '{swarm_name}' in Classic Central."
+        params = {"swarm_id": found[0].get("swarm_id")}
+        label = f"swarm={found[0].get('swarm_name')}"
+    doc = classic.get(PATH_FW_VERSIONS, params)
+    items = [v for v in (doc.get("data") or []) if isinstance(v, dict)]
+    if not items:
+        return f"No firmware versions returned ({label})."
+    lines = [f"# Firmware Versions ({label}, {len(items)} total)", ""]
+    for v in items:
+        lines.append(
+            f"- {v.get('firmware_version', '?')} {v.get('release_status', '')} created={v.get('create_date', '')}".rstrip()
+        )
+    return "\n".join(lines)
+
+
+def _register_optional_tools(target: MCPServer | None = None) -> None:
+    """Register the tools that need optional configuration (firmware_versions: ARUBA_CLASSIC_*)."""
+    if classic_configured():
+        (target or mcp).tool()(firmware_versions)
+
+
+_register_optional_tools()
 
 
 @mcp.tool()

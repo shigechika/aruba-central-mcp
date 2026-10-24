@@ -22,6 +22,7 @@ PATH_WLANS = "/network-monitoring/v1/wlans"
 PATH_SWARMS = "/network-monitoring/v1/swarms"
 PATH_CLIENTS_TREND = "/network-monitoring/v1/clients-trend"
 PATH_CLIENTS_TOPN_USAGE = "/network-monitoring/v1/clients-topn-usage"
+PATH_FIRMWARE_DETAILS = "/network-services/v1/firmware-details"
 
 logger = logging.getLogger(__name__)
 

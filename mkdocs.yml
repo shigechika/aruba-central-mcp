@@ -58,3 +58,4 @@ nav:
   - Home: index.md
   - Setup: setup.md
   - Reference: reference.md
+  - Firmware API notes: firmware-api-notes.md

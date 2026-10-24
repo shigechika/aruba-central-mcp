@@ -194,7 +194,8 @@ async def main_async(args: argparse.Namespace) -> int:
         if client is not None:
             await client.__aexit__(None, None, None)
 
-    stale = sorted(set(probes) - set(names))
+    opt_in = getattr(probes_module, "OPT_IN_TOOLS", frozenset())
+    stale = sorted(set(probes) - set(names) - set(opt_in))
     if stale and not args.only:
         # stderr: stdout carries the report, and --output json must stay valid.
         print(

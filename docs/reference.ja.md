@@ -52,6 +52,15 @@
 | `list_switches()` | 全スイッチ: 名前・ステータス・モデル・種別・IP・ファームウェア・MAC |
 | `get_site_summary()` | サイトごとの AP 台数（オンライン/オフライン）とクライアント数 |
 
+### ファームウェア
+
+| ツール | 用途 |
+|---|---|
+| `firmware_status(group="", site="", swarm_name="")` | スワームごとのグループ・サイト・AP のオンライン数・動作中の版・推奨の版・New Central の更新の状態。絞り込みは組み合わせ可、完全一致で大文字小文字を区別しない。Classic Central を設定すると、Classic の更新の状態・理由・予定・`upgrade_required` とグループの基準の版も出す |
+| `firmware_versions(device_type="IAP", swarm_name="")` | Classic Central が提供する版（`release` / `beta`）。`ARUBA_CLASSIC_*` を設定したときだけ登録される |
+
+どちらも読み取りだけ。どの API が何を返し、公開の資料で何が分からないかは [Firmware API notes](firmware-api-notes.md)（英語）。
+
 ### 朝のパトロール
 
 | ツール | 概要 |

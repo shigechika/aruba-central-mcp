@@ -9,6 +9,11 @@ Three constraints shape everything below.
 changed. A future tool that writes must be listed as state-changing and
 skipped, and the test suite enforces that.
 
+**Opt-in tools.** ``OPT_IN_TOOLS`` are registered only when their extra
+configuration is present (``firmware_versions`` needs ARUBA_CLASSIC_*). Their
+probes stay here so a configured deployment is covered, and an unconfigured
+one does not report them as stale.
+
 **No network-specific values in this file.** This repository is public, so a
 probe may not name an access point, a site, an SSID or a client. The four tools
 that need such an argument get it from an ``args_factory`` that discovers one
@@ -78,6 +83,9 @@ async def _first_client_mac(call: Caller) -> dict[str, Any]:
 #: found" branch) and daily_brief, which are guarded by name below.
 NO_ERROR = (r"^(Error|Failed|Missing environment variable|Invalid)",)
 
+
+#: Tools registered only when optional configuration is present (see the docstring).
+OPT_IN_TOOLS = frozenset({"firmware_versions"})
 
 PROBES: dict[str, Probe] = {
     # -- server / backend health ------------------------------------------
@@ -165,6 +173,19 @@ PROBES: dict[str, Probe] = {
     "get_top_clients_by_usage": Probe(
         args={"limit": 5},
         must_match=(r"^# Top Clients by Usage|^No top clients data available\.",),
+        must_not_match=NO_ERROR,
+    ),
+    # -- firmware ------------------------------------------------------------
+    # No filter: the probe may not name a group, site or swarm. An empty
+    # inventory is the same legitimate answer as for list_swarms.
+    "firmware_status": Probe(
+        must_match=(r"^# Firmware Status \(\d+ swarms, \d+ APs\)|^No swarms matched\.",),
+        must_not_match=NO_ERROR,
+        timeout=180,
+    ),
+    "firmware_versions": Probe(
+        args={"device_type": "IAP"},
+        must_match=(r"^# Firmware Versions \(device_type=IAP, \d+ total\)|^No firmware versions returned",),
         must_not_match=NO_ERROR,
     ),
     # -- morning patrol ------------------------------------------------------
