@@ -152,3 +152,109 @@ class TestRequests:
         assert [s["swarm_id"] for s in swarms] == ["s0", "s1", "s2"]
         assert route.calls[0].request.url.params["group"] == "G1"
         assert route.calls[1].request.url.params["offset"] == "2"
+
+
+class TestSecretsStayOutOfLogs:
+    def test_refresh_logs_no_secret_even_at_debug(self, token_file, caplog):
+        import logging
+
+        write_tokens(token_file, access_token="old-access", refresh_token="SECRET-REFRESH", expires_at=1)
+        c = make(token_file)
+        c.client_secret = "SECRET-CLIENT"
+        caplog.set_level(logging.DEBUG)
+        logging.getLogger("httpx").setLevel(logging.DEBUG)  # someone turned request logging on
+        try:
+            with respx.mock:
+                respx.post(f"{BASE}{PATH_OAUTH_TOKEN}").mock(
+                    return_value=httpx.Response(200, json={"access_token": "SECRET-NEW", "refresh_token": "SECRET-R2"})
+                )
+                c.access_token()
+            logging.getLogger("httpx").info(
+                "HTTP Request: POST %s", f"{BASE}/oauth2/token?client_secret=SECRET-CLIENT&refresh_token=SECRET-REFRESH"
+            )
+        finally:
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        assert "SECRET" not in text
+        assert "client_secret=***" in text
+
+    def test_http_loggers_are_quiet_by_default(self, token_file):
+        import logging
+
+        make(token_file)
+        assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+        assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING
+
+
+class TestDurability:
+    def test_bootstrapped_file_without_expiry_is_used_until_401(self, token_file):
+        write_tokens(token_file, access_token="boot-access", refresh_token="boot-refresh")
+        with respx.mock:
+            refresh = respx.post(f"{BASE}{PATH_OAUTH_TOKEN}").mock(
+                return_value=httpx.Response(200, json={"access_token": "new", "refresh_token": "new-r"})
+            )
+            route = respx.get(f"{BASE}{PATH_FW_SWARMS}").mock(
+                side_effect=[httpx.Response(401), httpx.Response(200, json={"swarms": []})]
+            )
+            make(token_file).get(PATH_FW_SWARMS)
+        assert refresh.call_count == 1
+        assert route.calls[0].request.headers["Authorization"] == "Bearer boot-access"
+
+    @pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="POSIX permissions, not root")
+    def test_unwritable_directory_refuses_to_refresh(self, tmp_path):
+        d = tmp_path / "ro"
+        d.mkdir()
+        f = d / "t.json"
+        write_tokens(f, access_token="a", refresh_token="r", expires_at=1)
+        os.chmod(d, 0o500)
+        try:
+            with respx.mock:
+                route = respx.post(f"{BASE}{PATH_OAUTH_TOKEN}")
+                with pytest.raises(ClassicError):
+                    make(f).access_token()
+                assert not route.called  # the old refresh token is not spent
+        finally:
+            os.chmod(d, 0o700)
+
+    def test_failed_write_keeps_the_new_pair_in_memory_and_says_so(self, token_file, monkeypatch):
+        write_tokens(token_file, access_token="old", refresh_token="old-r", expires_at=1)
+        c = make(token_file)
+
+        def boom(doc):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr(c, "_write", boom)
+        with respx.mock:
+            refresh = respx.post(f"{BASE}{PATH_OAUTH_TOKEN}").mock(
+                return_value=httpx.Response(
+                    200, json={"access_token": "new", "refresh_token": "new-r", "expires_in": 7200}
+                )
+            )
+            assert c.access_token() == "new"
+            assert c.access_token() == "new"  # served from memory, no second refresh
+        assert refresh.call_count == 1
+        assert c.persist_error and "re-bootstrap" in c.persist_error and "new-r" not in c.persist_error
+        assert json.loads(token_file.read_text(encoding="utf-8"))["refresh_token"] == "old-r"
+
+    def test_write_fsyncs_and_replaces(self, token_file, monkeypatch):
+        synced = []
+        real_fsync = os.fsync
+        monkeypatch.setattr(os, "fsync", lambda fd: (synced.append(fd), real_fsync(fd)))
+        make(token_file)._write({"access_token": "a", "refresh_token": "r", "expires_at": 1})
+        assert len(synced) >= (1 if sys.platform == "win32" else 2)  # file, then directory
+        assert json.loads(token_file.read_text(encoding="utf-8"))["refresh_token"] == "r"
+
+    @pytest.mark.skipif(classic_mod.fcntl is None, reason="no fcntl")
+    def test_unopenable_lock_file_is_a_classic_error(self, token_file, monkeypatch):
+        write_tokens(token_file, access_token="a", refresh_token="r", expires_at=1)
+        c = make(token_file)
+        real_open = open
+
+        def fake_open(path, *a, **k):
+            if str(path).endswith(".lock"):
+                raise PermissionError("denied")
+            return real_open(path, *a, **k)
+
+        monkeypatch.setattr("builtins.open", fake_open)
+        with pytest.raises(ClassicError, match="lock file"):
+            c.access_token()

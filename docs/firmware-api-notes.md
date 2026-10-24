@@ -146,8 +146,43 @@ Not confirmed:
 
 `firmware_status(group, site, swarm_name)`: any combination, each exact and
 case-insensitive, all must match; group from the AP's `deviceGroupName`, site
-from `siteName`, swarm from `clusterName`. Classic is queried with
-`group=` server-side when a group is given.
+from `siteName`, swarm from `clusterName`. APs with no cluster are listed per
+(group, site), not merged into one line.
+
+How it reads:
+
+- New Central AP inventory in full (one page per 1000 APs), filtered locally.
+- `firmware-details`: with a filter, narrowed to `siteName in (...)` of the
+  matched APs when that fits the 256-character filter limit; otherwise, and
+  with no filter, every AP. Not narrowed by `serialNumber in (...)`: about 15
+  serials fit in 256 characters, so a swarm of 140 APs would take 10 requests
+  where the unfiltered read takes one.
+- Classic: `/firmware/v1/swarms?group=<name>` and the compliance version, once
+  per distinct group of the matched APs (up to 20), with the group's exact
+  name as New Central reports it, so a filter typed in another case still
+  reaches Classic. The first Classic failure (authentication or any other)
+  is noted once and the remaining Classic calls are skipped; the New Central
+  part of the answer is kept.
+- Join: Classic `swarm_id` = New Central `clusterId` when they match; otherwise
+  by (group, swarm name). Several Classic swarms with that name are reported
+  as ambiguous, never picked. `firmware_versions` refuses an ambiguous
+  `swarm_name` and takes `group` or `swarm_id` instead.
+
+Token file handling (Classic):
+
+- A refresh first checks that the token file's directory is writable; if
+  not, it does not refresh (the old refresh token would be spent and the new
+  one could not be saved).
+- The new pair is written to a temp file, flushed and fsynced, renamed over
+  the file, and the directory fsynced. If that still fails, the process keeps
+  the pair in memory, reports it in `health_check` (`classic: error`) and
+  `firmware_status` notes with the remedy, and retries the write on the next
+  refresh.
+- A bootstrapped file without `expires_at` is used as is until the first
+  HTTP 401, then refreshed once.
+- httpx/httpcore are set to WARNING when the Classic client is built, and a
+  filter masks `client_id`, `client_secret`, `refresh_token`, `access_token`
+  query values in anything they log.
 
 Planned upgrade tool (phase 2, not implemented): the same three selectors,
 refusing a call with none of them (no "upgrade everything"). Classic upgrades

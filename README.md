@@ -131,7 +131,11 @@ The refresh token is replaced on every refresh (the old one stops working), so
 let only this server refresh it, and point every process that runs it at the
 same file: refreshes are serialised with a lock file next to it. When the
 refresh token is rejected, `health_check` reports `classic: error` and asks for
-a new pair. Windows has no cross-process lock here, so run one process there.
+a new pair; when only some `ARUBA_CLASSIC_*` variables are set it reports
+`classic: misconfigured` and names the missing ones. The directory holding the
+file must be writable by that user (the new pair is written next to it, then
+renamed); without that, the server refuses to refresh rather than lose the
+rotated token. Windows has no cross-process lock here, so run one process there.
 
 ### How to obtain API credentials
 
