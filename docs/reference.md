@@ -53,6 +53,16 @@ session start or after a tool-call timeout.
 | `list_switches()` | All switches: name, status, model, type, IP, firmware, MAC |
 | `get_site_summary()` | Per-site AP counts (online/offline) and client counts |
 
+### Firmware
+
+| Tool | Purpose |
+|---|---|
+| `firmware_status(group="", site="", swarm_name="")` | Per swarm: group, site, APs online/total, running versions, recommended version, New Central upgrade status. Filters combine; exact, case-insensitive. With Classic Central configured: Classic upgrade state, reason, schedule, `upgrade_required`, and each group's compliance version |
+| `firmware_versions(device_type="IAP", swarm_name="")` | Versions Classic Central offers (`release` / `beta`); only registered when `ARUBA_CLASSIC_*` is set |
+
+Both read only. Which API reports what, and what the published references
+leave open, is in [Firmware API notes](firmware-api-notes.md).
+
 ### Morning patrol
 
 | Tool | Purpose |

@@ -51,8 +51,13 @@ uv sync          # または: pip install -e .
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 クライアントシークレット | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 
 3つとも必須です。いずれか未設定のまま最初に使われるとサーバーがエラーを送出
-します。設定ファイルやファイルパス型の環境変数は無く、すべて環境変数だけで
-完結するので、プラグイン自身の `.mcp.json` の `env` ブロックにそのまま書けます。
+します。設定ファイルは無く、すべて環境変数だけで完結するので、プラグイン自身の
+`.mcp.json` の `env` ブロックにそのまま書けます。
+
+ファームウェアのツールで Classic Central の詳細も見るときは、`ARUBA_CLASSIC_BASE_URL`・
+`ARUBA_CLASSIC_CLIENT_ID`・`ARUBA_CLASSIC_CLIENT_SECRET`・`ARUBA_CLASSIC_TOKEN_FILE`
+（唯一のファイルパス。このサーバーが更新し続けるトークンの組）を設定します。
+ファイルの最初の置き方は README の「任意: Classic Central」を参照してください。
 
 ## 何かに組み込む前に確認する
 

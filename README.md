@@ -43,6 +43,15 @@ Documentation: <https://shigechika.github.io/aruba-central-mcp/>
 | `get_site_summary` | Aggregated site-level summary (AP counts, client counts) |
 | `health_check` | Report server version and verify Aruba Central authentication (no data fetch) |
 
+### Firmware
+
+| Tool | Description |
+|------|-------------|
+| `firmware_status` | Per swarm: group, site, running versions, recommended version, upgrade status; filter by group, site and/or swarm. With Classic Central configured, also Classic's upgrade state and reason and each group's compliance version |
+| `firmware_versions` | Firmware versions Classic Central offers for a device type or one swarm (registered only when Classic Central is configured) |
+
+Every tool reads; nothing is configured or upgraded. See [docs/firmware-api-notes.md](docs/firmware-api-notes.md) for which API reports what.
+
 ### Highlights
 
 - **Server-side OData filtering** for efficient queries
@@ -95,6 +104,38 @@ Set the following environment variables:
 | `ARUBA_CENTRAL_BASE_URL` | API gateway URL | `apigw-uswest4.central.arubanetworks.com` |
 | `ARUBA_CENTRAL_CLIENT_ID` | OAuth2 client ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 client secret | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+
+### Optional: Classic Central (firmware details)
+
+AOS-8 Instant APs in Classic Central groups are upgraded from Classic Central,
+and only its API reports why a swarm's upgrade failed, the group compliance
+version and the versions on offer. Set all four to enable that:
+
+| Variable | Description |
+|---|---|
+| `ARUBA_CLASSIC_BASE_URL` | Classic API gateway host, `apigw-<region>.central.arubanetworks.com` |
+| `ARUBA_CLASSIC_CLIENT_ID` | Client id of the API-gateway application |
+| `ARUBA_CLASSIC_CLIENT_SECRET` | Its client secret |
+| `ARUBA_CLASSIC_TOKEN_FILE` | JSON file holding the token pair; this server rewrites it on every refresh |
+
+Bootstrap the token file once with the access and refresh token Classic
+Central's API Gateway issues for that application, readable only by the user
+the server runs as:
+
+```bash
+umask 077
+printf '{"access_token": "%s", "refresh_token": "%s"}\n' "$ACCESS" "$REFRESH" > /path/to/classic-token.json
+```
+
+The refresh token is replaced on every refresh (the old one stops working), so
+let only this server refresh it, and point every process that runs it at the
+same file: refreshes are serialised with a lock file next to it. When the
+refresh token is rejected, `health_check` reports `classic: error` and asks for
+a new pair; when only some `ARUBA_CLASSIC_*` variables are set it reports
+`classic: misconfigured` and names the missing ones. The directory holding the
+file must be writable by that user (the new pair is written next to it, then
+renamed); without that, the server refuses to refresh rather than lose the
+rotated token. Windows has no cross-process lock here, so run one process there.
 
 ### How to obtain API credentials
 

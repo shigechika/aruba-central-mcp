@@ -51,9 +51,13 @@ For details, see:
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 client secret | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 
 All three are required — the server raises an error at first use if any is
-unset. There is no config file and no file-path variable; every setting
-comes from the environment, so it drops into a plugin's own `.mcp.json`
-`env` block without any extra wiring.
+unset. There is no config file; every setting comes from the environment, so
+it drops into a plugin's own `.mcp.json` `env` block without any extra wiring.
+
+Optional, for the firmware tools' Classic Central details: `ARUBA_CLASSIC_BASE_URL`,
+`ARUBA_CLASSIC_CLIENT_ID`, `ARUBA_CLASSIC_CLIENT_SECRET` and `ARUBA_CLASSIC_TOKEN_FILE`
+(the one file path: a token pair this server keeps refreshed). See the README's
+"Optional: Classic Central" section for bootstrapping the file.
 
 ## Verify before wiring it into anything
 

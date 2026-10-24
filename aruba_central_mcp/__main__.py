@@ -7,7 +7,7 @@ import os
 import sys
 
 from aruba_central_mcp import __version__
-from aruba_central_mcp.server import _get_client, mcp
+from aruba_central_mcp.server import _get_classic, _get_client, mcp
 
 
 def _check_config() -> int:
@@ -23,6 +23,16 @@ def _check_config() -> int:
         print(f"Authentication failed: {e}", file=sys.stderr)
         return 2
     print(f"OK: authenticated to {client.base_url}")
+    classic = _get_classic()
+    if classic is None:
+        print("Info: Classic Central not configured (ARUBA_CLASSIC_*); firmware_versions is not offered")
+        return 0
+    try:
+        classic.access_token()
+    except Exception as e:
+        print(f"Classic Central authentication failed: {e}", file=sys.stderr)
+        return 2
+    print(f"OK: Classic Central token usable at {classic.base_url}")
     return 0
 
 

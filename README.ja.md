@@ -41,6 +41,15 @@
 | `get_site_summary` | サイト別集約サマリー（AP 数・クライアント数） |
 | `health_check` | サーバーバージョンの報告と Aruba Central 認証の確認（データ取得なし） |
 
+### ファームウェア
+
+| ツール | 説明 |
+|------|-------------|
+| `firmware_status` | スワームごとのグループ・サイト・動作中の版・推奨の版・更新の状態。グループ・サイト・スワームで絞り込める。Classic Central を設定すると、Classic の更新の状態と理由、グループの基準の版（コンプライアンス）も出す |
+| `firmware_versions` | Classic Central が提供する版の一覧（デバイス種別か 1 つのスワーム）。Classic Central を設定したときだけ登録される |
+
+どのツールも読み取りだけで、設定や更新はしない。どの API が何を返すかは [docs/firmware-api-notes.md](docs/firmware-api-notes.md)。
+
 ### 特徴
 
 - **サーバー側 OData フィルタリング**による効率的なクエリ
@@ -93,6 +102,33 @@ pip install -e .
 | `ARUBA_CENTRAL_BASE_URL` | API ゲートウェイ URL | `apigw-uswest4.central.arubanetworks.com` |
 | `ARUBA_CENTRAL_CLIENT_ID` | OAuth2 クライアント ID | `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `ARUBA_CENTRAL_CLIENT_SECRET` | OAuth2 クライアントシークレット | `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+
+### 任意: Classic Central（ファームウェアの詳細）
+
+Classic Central のグループにいる AOS-8 の Instant AP は Classic Central から更新する。スワームの更新が失敗した理由、
+グループの基準の版、提供されている版は Classic の API にしか無い。使うときは 4 つとも設定する。
+
+| 変数 | 説明 |
+|---|---|
+| `ARUBA_CLASSIC_BASE_URL` | Classic の API ゲートウェイ（`apigw-<region>.central.arubanetworks.com`） |
+| `ARUBA_CLASSIC_CLIENT_ID` | API ゲートウェイのアプリのクライアント ID |
+| `ARUBA_CLASSIC_CLIENT_SECRET` | そのシークレット |
+| `ARUBA_CLASSIC_TOKEN_FILE` | トークンの組を置く JSON ファイル。更新のたびにこのサーバーが書き換える |
+
+最初に一度、そのアプリに対して Classic Central の API ゲートウェイが発行したアクセストークンと更新用トークンを置く
+（サーバーを動かすユーザーだけが読めるように）。
+
+```bash
+umask 077
+printf '{"access_token": "%s", "refresh_token": "%s"}\n' "$ACCESS" "$REFRESH" > /path/to/classic-token.json
+```
+
+更新用トークンは更新のたびに入れ替わり、古いものは使えなくなる。更新はこのサーバーだけに任せ、同じサーバーを動かす
+プロセスはすべて同じファイルを指すこと（横のロックファイルで更新を 1 つずつにする）。更新用トークンが拒否されたら
+`health_check` が `classic: error` を返し、新しい組を求める。`ARUBA_CLASSIC_*` の一部だけを設定したときは
+`classic: misconfigured` を返し、足りない変数を示す。ファイルを置くディレクトリは、そのユーザーが書き込めること
+（新しい組を隣に書いてから置き換えるため）。書き込めなければ、入れ替わったトークンを失わないよう更新しない。
+Windows ではプロセス間のロックが無いので 1 プロセスで使う。
 
 ### API 資格情報の取得方法
 

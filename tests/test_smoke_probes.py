@@ -46,7 +46,7 @@ ADDRESS_SHAPES = {
 #: a serial number, a site, an SSID, a client. Most of these are bare words
 #: with no address shape for the patterns above to recognise, so they are
 #: refused by key: each comes from an args_factory or is left unset.
-IDENTIFIER_ARGS = {"ap_name", "serial_number", "mac_address", "site", "site_id", "site_name", "ssid"}
+IDENTIFIER_ARGS = {"ap_name", "serial_number", "mac_address", "site", "site_id", "site_name", "ssid", "group", "swarm_name"}
 
 #: Parameters that bound how much work a tool does. A scheduled probe must pass
 #: each one it is offered rather than inheriting a default sized for a human
@@ -90,8 +90,14 @@ def test_every_registered_tool_has_a_probe():
 
 def test_no_probe_targets_a_removed_tool():
     registered = _registered_tool_names()
-    stale = sorted(set(smoke_probes.PROBES) - registered)
+    stale = sorted(set(smoke_probes.PROBES) - registered - smoke_probes.OPT_IN_TOOLS)
     assert not stale, f"Probe spec(s) for tools that are no longer registered: {stale}"
+
+
+def test_opt_in_tools_are_known_to_the_server():
+    """An opt-in name must be a tool the server can register, not a typo that hides a stale probe."""
+    for name in smoke_probes.OPT_IN_TOOLS:
+        assert re.search(rf"^def {name}\(", _server_source(), re.M), name
 
 
 def test_state_changing_tools_are_skipped():
