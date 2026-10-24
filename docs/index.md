@@ -14,6 +14,7 @@ this AP online" or "where did this client roam."
 | Access points | `list_aps`, `get_ap_status`, `list_radios`, `list_bssids`, `list_wlans`, `list_swarms`, `get_ap_throughput`, `get_top_aps` |
 | Clients | `list_clients`, `find_client_by_mac`, `get_clients_trend`, `get_top_clients_by_usage`, `get_client_mobility_trail` |
 | Infrastructure | `list_switches`, `get_site_summary` |
+| Firmware | `firmware_status`; `firmware_versions` (only with Classic Central configured) |
 | Morning patrol | `health_check`, `daily_brief` |
 
 **Every tool reads.** Nothing in Aruba Central is configured through this

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "aruba-central-mcp",
   "displayName": "Aruba Central MCP",
-  "description": "Aruba Central (GreenLake New Central API) for Claude Code, through an OAuth2 Client Credentials service account. List and inspect access points, radios, BSSIDs, WLANs, swarms, switches, and wireless clients, get bandwidth/throughput trends and client mobility trails, and run a one-shot daily_brief AP health check. Every tool only reads — nothing in Central is configured. Requires ARUBA_CENTRAL_BASE_URL, ARUBA_CENTRAL_CLIENT_ID, and ARUBA_CENTRAL_CLIENT_SECRET.",
+  "description": "Aruba Central (GreenLake New Central API) for Claude Code, through an OAuth2 Client Credentials service account. List and inspect access points, radios, BSSIDs, WLANs, swarms, switches, and wireless clients, get bandwidth/throughput trends and client mobility trails, see each swarm's firmware and upgrade status (firmware_status), and run a one-shot daily_brief AP health check. Every tool only reads — nothing in Central is configured. Requires ARUBA_CENTRAL_BASE_URL, ARUBA_CENTRAL_CLIENT_ID, and ARUBA_CENTRAL_CLIENT_SECRET. Optional ARUBA_CLASSIC_BASE_URL, ARUBA_CLASSIC_CLIENT_ID, ARUBA_CLASSIC_CLIENT_SECRET and ARUBA_CLASSIC_TOKEN_FILE add Classic Central firmware details and firmware_versions.",
   "author": {
     "name": "AIKAWA Shigechika",
     "url": "https://github.com/shigechika"

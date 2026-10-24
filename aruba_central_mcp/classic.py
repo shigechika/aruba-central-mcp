@@ -41,6 +41,7 @@ PATH_FW_SWARMS = "/firmware/v1/swarms"
 PATH_FW_VERSIONS = "/firmware/v1/versions"
 PATH_FW_STATUS = "/firmware/v1/status"
 PATH_FW_COMPLIANCE = "/firmware/v1/upgrade/compliance_version"
+PATH_CONFIG_GROUPS = "/configuration/v2/groups"
 
 #: Refresh this many seconds before the access token's stated expiry.
 EXPIRY_MARGIN = 120
@@ -103,6 +104,20 @@ class ClassicError(Exception):
 
 class ClassicAuthError(ClassicError):
     """The token pair cannot be used or renewed; the operator must re-bootstrap the token file."""
+
+
+class ClassicDeadline(ClassicError):
+    """The caller's time budget ran out before the request could be made."""
+
+
+def _remaining(deadline: float | None, cap: float) -> float:
+    """HTTP timeout for the next request: ``cap`` or what is left before ``deadline``."""
+    if deadline is None:
+        return cap
+    left = deadline - time.monotonic()
+    if left < 1:
+        raise ClassicDeadline("time budget used up")
+    return min(cap, left)
 
 
 def _host(base_url: str) -> str:
@@ -229,7 +244,7 @@ class ClassicClient:
             return True  # freshly bootstrapped: trust it until the API says 401
         return isinstance(expires_at, (int, float)) and time.time() < expires_at - EXPIRY_MARGIN
 
-    def _refresh(self, stale_access: str | None) -> str:
+    def _refresh(self, stale_access: str | None, deadline: float | None = None) -> str:
         """Renew the pair under the lock unless another process already did."""
         with self._locked():
             doc = self._read()
@@ -247,7 +262,7 @@ class ClassicClient:
                         "grant_type": "refresh_token",
                         "refresh_token": doc["refresh_token"],
                     },
-                    timeout=30,
+                    timeout=_remaining(deadline, 30),
                 )
             except httpx.HTTPError as e:
                 raise ClassicError(f"token refresh failed ({type(e).__name__})") from e
@@ -284,29 +299,35 @@ class ClassicClient:
                 self.persist_error = None
             return access
 
-    def access_token(self) -> str:
+    def access_token(self, deadline: float | None = None) -> str:
         """A usable access token, refreshing first when the stored one is (nearly) expired."""
         doc = self._read()
         if self._fresh(doc):
             return doc["access_token"]
-        return self._refresh(doc.get("access_token"))
+        return self._refresh(doc.get("access_token"), deadline)
 
     # -- requests -----------------------------------------------------------
 
-    def get(self, path: str, params: dict | None = None) -> dict:
-        """GET a Classic API path; a 401 triggers one refresh and one retry. Returns a JSON object."""
-        token = self.access_token()
+    def get(self, path: str, params: dict | None = None, deadline: float | None = None) -> dict:
+        """GET a Classic API path; a 401 triggers one refresh and one retry. Returns a JSON object.
+
+        ``deadline`` (time.monotonic()) bounds every request made here: ClassicDeadline
+        is raised instead of starting one with less than a second left, and the HTTP
+        timeout is cut to what remains.
+        """
+        token = self.access_token(deadline)
         for attempt in (1, 2):
             try:
                 resp = self._http.get(
                     f"https://{self.base_url}{path}",
                     params=params,
                     headers={"Authorization": f"Bearer {token}"},
+                    timeout=_remaining(deadline, 60),
                 )
             except httpx.HTTPError as e:
                 raise ClassicError(f"Classic API error ({path}): {type(e).__name__}") from e
             if resp.status_code == 401 and attempt == 1:
-                token = self._refresh(token)
+                token = self._refresh(token, deadline)
                 continue
             if resp.status_code != 200:
                 detail = ""
@@ -329,7 +350,32 @@ class ClassicClient:
             return body
         raise ClassicError(f"Classic API error ({path}): unauthorized after refresh")  # pragma: no cover
 
-    def list_swarms(self, group: str = "", page_size: int = 1000, max_pages: int = 20) -> list[dict]:
+    def list_groups(self, page_size: int = 20, max_pages: int = 200, deadline: float | None = None) -> list[str]:
+        """Every Classic group name. ``data`` is a list of one-element lists, e.g. ``[["group-a"], ["group-b"]]``.
+
+        Pages with ``offset`` until a page comes back empty -- a short page is not
+        taken as the end, since the server may cap ``limit`` (documented range
+        1-20). Raises ClassicError if ``max_pages`` runs out before an empty page.
+        """
+        names: list[str] = []
+        offset = 0
+        for _ in range(max_pages):
+            doc = self.get(PATH_CONFIG_GROUPS, {"limit": page_size, "offset": offset}, deadline)
+            rows = doc.get("data") or []
+            if not isinstance(rows, list):
+                raise ClassicError(f"Classic API error ({PATH_CONFIG_GROUPS}): data is not a list")
+            if not rows:
+                return names
+            for row in rows:
+                name = row[0] if isinstance(row, list) and row else row
+                if isinstance(name, str) and name and name not in names:
+                    names.append(name)
+            offset += len(rows)
+        raise ClassicError(f"Classic API error ({PATH_CONFIG_GROUPS}): more than {max_pages} pages")
+
+    def list_swarms(
+        self, group: str = "", page_size: int = 1000, max_pages: int = 20, deadline: float | None = None
+    ) -> list[dict]:
         """Every swarm of ``/firmware/v1/swarms`` (optionally one group), following offset paging."""
         swarms: list[dict] = []
         offset = 0
@@ -337,7 +383,7 @@ class ClassicClient:
             params: dict = {"limit": page_size, "offset": offset}
             if group:
                 params["group"] = group
-            doc = self.get(PATH_FW_SWARMS, params)
+            doc = self.get(PATH_FW_SWARMS, params, deadline)
             page = doc.get("swarms") or []
             if not isinstance(page, list):
                 raise ClassicError(f"Classic API error ({PATH_FW_SWARMS}): swarms is not a list")

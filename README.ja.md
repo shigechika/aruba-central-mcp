@@ -39,13 +39,14 @@
 |--------|------|
 | `list_switches` | スイッチ一覧 |
 | `get_site_summary` | サイト別集約サマリー（AP 数・クライアント数） |
+| `daily_brief` | 朝の AP の健全性チェックを 1 回で。オフラインの AP の割合がしきい値を超えたサイトを出す |
 | `health_check` | サーバーバージョンの報告と Aruba Central 認証の確認（データ取得なし） |
 
 ### ファームウェア
 
 | ツール | 説明 |
 |------|-------------|
-| `firmware_status` | スワームごとのグループ・サイト・動作中の版・推奨の版・更新の状態。グループ・サイト・スワームで絞り込める。Classic Central を設定すると、Classic の更新の状態と理由、グループの基準の版（コンプライアンス）も出す |
+| `firmware_status` | スワームごとのグループ・サイト・動作中の版・推奨の版・更新の状態。グループ・サイト・スワームで絞り込める。Classic Central を設定すると、Classic のグループ、グループの基準の版（次に Central が更新する先）とその予定時刻、Classic の更新の状態と理由、Classic にだけ残るスワームも出す |
 | `firmware_versions` | Classic Central が提供する版の一覧（デバイス種別か 1 つのスワーム）。Classic Central を設定したときだけ登録される |
 
 どのツールも読み取りだけで、設定や更新はしない。どの API が何を返すかは [docs/firmware-api-notes.md](docs/firmware-api-notes.md)。
@@ -156,6 +157,8 @@ Windows ではプロセス間のロックが無いので 1 プロセスで使う
 
 プラグインは `uvx aruba-central-mcp` を起動し、[設定](#設定)に記載した3つの
 環境変数を読みます。Claude Code を起動する前に export しておいてください。
+任意の `ARUBA_CLASSIC_*` の 4 つもそのまま渡すので、export しておけば `firmware_status` に
+Classic の詳細が付き、`firmware_versions` も使えます。設定しなければ空で渡り、Classic は使われません。
 
 プラグインは `uvx` を起動するため、Claude Code を実行するプロセスの `PATH` に
 `uvx` が通っている必要があります。ログインシェルなら通常問題ありませんが、

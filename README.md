@@ -42,12 +42,13 @@ Documentation: <https://shigechika.github.io/aruba-central-mcp/>
 | `list_switches` | List all switches |
 | `get_site_summary` | Aggregated site-level summary (AP counts, client counts) |
 | `health_check` | Report server version and verify Aruba Central authentication (no data fetch) |
+| `daily_brief` | One-shot morning AP health check: sites whose offline-AP ratio exceeds a threshold |
 
 ### Firmware
 
 | Tool | Description |
 |------|-------------|
-| `firmware_status` | Per swarm: group, site, running versions, recommended version, upgrade status; filter by group, site and/or swarm. With Classic Central configured, also Classic's upgrade state and reason and each group's compliance version |
+| `firmware_status` | Per swarm: group, site, running versions, recommended version, upgrade status; filter by group, site and/or swarm. With Classic Central configured, also the Classic group, the group's compliance version (what Central upgrades the swarm to next) with its scheduled time, Classic's upgrade state and reason, and Classic-only (stale) swarms |
 | `firmware_versions` | Firmware versions Classic Central offers for a device type or one swarm (registered only when Classic Central is configured) |
 
 Every tool reads; nothing is configured or upgraded. See [docs/firmware-api-notes.md](docs/firmware-api-notes.md) for which API reports what.
@@ -163,7 +164,10 @@ the server for you:
 
 The plugin launches `uvx aruba-central-mcp` and reads the same three environment
 variables described in [Configuration](#configuration); export them before
-starting Claude Code.
+starting Claude Code. It also passes the four optional `ARUBA_CLASSIC_*`
+variables through, so `firmware_status` gets its Classic details and
+`firmware_versions` is offered when they are exported; left unset they arrive
+empty and Classic stays off.
 
 `uvx` must be on the `PATH` of the process that runs Claude Code — a login
 shell usually has it, but a GUI-launched app may not; install

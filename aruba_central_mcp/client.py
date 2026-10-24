@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Optional
 
 import httpx
 
@@ -100,20 +101,28 @@ class ArubaClient:
             return self._authenticate()
         return self._token
 
-    def get(self, path: str, params: dict | None = None) -> dict:
+    def get(self, path: str, params: dict | None = None, deadline: Optional[float] = None) -> dict:
         """Send a GET request to the Aruba Central API.
 
+        ``deadline`` (a time.monotonic() value) bounds the request: it is refused
+        when less than a second is left, and the HTTP timeout is cut to what remains.
+
         Raises:
-            ArubaAPIError: On HTTP errors.
+            ArubaAPIError: On HTTP errors, or when the deadline has passed.
         """
         url = f"https://{self.base_url}{path}"
+        timeout = None
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining < 1:
+                raise ArubaAPIError(f"API error ({path}): time budget used up")
+            timeout = min(120.0, remaining)
         token = self._get_token()
         try:
-            resp = self._http.get(
-                url,
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            kwargs = {"params": params, "headers": {"Authorization": f"Bearer {token}"}}
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+            resp = self._http.get(url, **kwargs)
             resp.raise_for_status()
         except httpx.HTTPError as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
@@ -126,6 +135,7 @@ class ArubaClient:
         limit: int = 1000,
         max_pages: int = 20,
         params: dict | None = None,
+        deadline: Optional[float] = None,
     ) -> list[dict]:
         """Fetch all items from a paginated API endpoint.
 
@@ -139,6 +149,7 @@ class ArubaClient:
             max_pages: Maximum number of pages to fetch.
             params: Additional query parameters (e.g. OData filter, site-id).
                     These are preserved across all page requests.
+            deadline: Optional time.monotonic() value bounding every page request.
 
         Returns:
             List of item dicts.
@@ -147,7 +158,7 @@ class ArubaClient:
         base_params: dict = {"limit": limit, **(params or {})}
         page_params = base_params.copy()
         for _ in range(max_pages):
-            resp = self.get(path, params=page_params)
+            resp = self.get(path, params=page_params, deadline=deadline)
             items = resp.get("items", [])
             total = resp.get("total", 0)
             next_cursor = resp.get("next")
