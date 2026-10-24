@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.10.0...v0.10.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* join Classic Central firmware data by swarm id and group map ([#68](https://github.com/shigechika/aruba-central-mcp/issues/68)) ([6c5bc73](https://github.com/shigechika/aruba-central-mcp/commit/6c5bc735ace8d5ccaaa402b1fcfdddaa4cd6700b))
+
 ## [0.10.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.9.0...v0.10.0) (2026-10-24)
 
 
