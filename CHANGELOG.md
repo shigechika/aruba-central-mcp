@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.10.1...v0.10.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* read /firmware/v1/versions as the bare JSON array the live API returns ([#72](https://github.com/shigechika/aruba-central-mcp/issues/72)) ([454b036](https://github.com/shigechika/aruba-central-mcp/commit/454b036c29f19d1aa31d5750d0574135496ddab0))
+
 ## [0.10.1](https://github.com/shigechika/aruba-central-mcp/compare/v0.10.0...v0.10.1) (2026-10-24)
 
 
