@@ -6,7 +6,7 @@ English | [日本語](README.ja.md)
 
 MCP server for [Aruba Central](https://www.arubanetworks.com/products/network-management-operations/central/) (GreenLake New Central API).
 
-Exposes access point, switch, and wireless client status to MCP-compatible AI assistants (Claude Code, Claude Desktop, etc.) via STDIO transport.
+Exposes access point, switch, and wireless client status to MCP-compatible AI assistants (Claude Code, Claude Desktop, OpenAI Codex, etc.) via STDIO transport.
 
 Documentation: <https://shigechika.github.io/aruba-central-mcp/>
 
@@ -220,6 +220,20 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+### Codex
+
+```bash
+codex mcp add aruba-central \
+  --env ARUBA_CENTRAL_BASE_URL=apigw-uswest4.central.arubanetworks.com \
+  --env ARUBA_CENTRAL_CLIENT_ID=your-client-id \
+  --env ARUBA_CENTRAL_CLIENT_SECRET=your-client-secret \
+  -- uvx aruba-central-mcp
+```
+
+Any other MCP client that launches stdio servers works the same way: give it
+`uvx aruba-central-mcp` as the command and set the three `ARUBA_CENTRAL_*`
+variables in its environment.
 
 ### Direct execution
 

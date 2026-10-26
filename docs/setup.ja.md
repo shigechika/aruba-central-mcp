@@ -139,6 +139,18 @@ claude mcp add aruba-central \
 }
 ```
 
+### Codex
+
+```bash
+codex mcp add aruba-central \
+  --env ARUBA_CENTRAL_BASE_URL=apigw-uswest4.central.arubanetworks.com \
+  --env ARUBA_CENTRAL_CLIENT_ID=your-client-id \
+  --env ARUBA_CENTRAL_CLIENT_SECRET=your-client-secret \
+  -- uvx aruba-central-mcp
+```
+
+stdio サーバーを起動できる MCP クライアントなら、どれでも同じ形で使えます。コマンドに `uvx aruba-central-mcp` を指定し、環境変数 `ARUBA_CENTRAL_*` の 3 つを設定してください。
+
 ### 直接実行
 
 ```bash

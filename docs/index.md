@@ -3,7 +3,7 @@
 MCP server for [Aruba Central](https://www.arubanetworks.com/products/network-management-operations/central/) (GreenLake New Central API).
 
 Exposes access point, switch, and wireless client status to MCP-compatible AI
-assistants (Claude Code, Claude Desktop, etc.) via STDIO transport — built for
+assistants (Claude Code, Claude Desktop, OpenAI Codex, etc.) via STDIO transport — built for
 a morning `daily_brief` AP health check and for the moment someone asks "is
 this AP online" or "where did this client roam."
 
@@ -18,7 +18,7 @@ this AP online" or "where did this client roam."
 | Morning patrol | `health_check`, `daily_brief` |
 
 **Every tool reads.** Nothing in Aruba Central is configured through this
-server — there is no write path, so it can be handed to Claude without
+server — there is no write path, so it can be handed to an AI assistant without
 granting any ability to change device or client state. See
 [Reference](reference.md) for the full tool index.
 

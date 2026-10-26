@@ -139,6 +139,20 @@ Or add to `.mcp.json`:
 }
 ```
 
+### Codex
+
+```bash
+codex mcp add aruba-central \
+  --env ARUBA_CENTRAL_BASE_URL=apigw-uswest4.central.arubanetworks.com \
+  --env ARUBA_CENTRAL_CLIENT_ID=your-client-id \
+  --env ARUBA_CENTRAL_CLIENT_SECRET=your-client-secret \
+  -- uvx aruba-central-mcp
+```
+
+Any other MCP client that launches stdio servers works the same way: give it
+`uvx aruba-central-mcp` as the command and set the three `ARUBA_CENTRAL_*`
+variables in its environment.
+
 ### Direct execution
 
 ```bash

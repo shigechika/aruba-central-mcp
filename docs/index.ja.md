@@ -3,7 +3,7 @@
 [Aruba Central](https://www.arubanetworks.com/products/network-management-operations/central/)（GreenLake New Central API）用の MCP サーバーです。
 
 アクセスポイント、スイッチ、無線クライアントの状態を MCP 対応 AI アシスタント
-（Claude Code、Claude Desktop など）に STDIO transport 経由で公開します。朝の
+（Claude Code、Claude Desktop、OpenAI Codex など）に STDIO transport 経由で公開します。朝の
 `daily_brief` による AP ヘルスチェックと、「この AP はオンラインか」「このクラ
 イアントはどこをローミングしたか」を訊かれた瞬間のために作りました。
 
@@ -19,7 +19,7 @@
 
 **すべてのツールが読み取り専用です。** このサーバー経由で Aruba Central 側の
 設定が変わることはありません。書き込み経路が存在しないため、状態を変更する
-権限を一切与えずに Claude へ渡せます。全ツールの一覧は
+権限を一切与えずに AI アシスタントへ渡せます。全ツールの一覧は
 [リファレンス](reference.ja.md) を参照してください。
 
 ## 設計方針
