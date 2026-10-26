@@ -27,7 +27,6 @@ from mcp.shared.exceptions import MCPError
 from aruba_central_mcp import __version__
 from aruba_central_mcp.classic import (
     PATH_FW_COMPLIANCE,
-    PATH_FW_VERSIONS,
     ClassicAuthError,
     ClassicClient,
     ClassicDeadline,
@@ -1152,13 +1151,13 @@ def firmware_versions(device_type: str = "IAP", swarm_name: str = "", group: str
     device_type = (device_type or "").strip().upper()
     if device_type not in CLASSIC_DEVICE_TYPES:
         raise ValueError(f"device_type must be one of {', '.join(CLASSIC_DEVICE_TYPES)}")
+    deadline = time.monotonic() + TOOL_BUDGET_SECONDS
     params: dict = {"device_type": device_type}
     label = f"device_type={device_type}"
     swarm_id = (swarm_id or "").strip()
     if swarm_id:
         params, label = {"swarm_id": swarm_id}, f"swarm_id={swarm_id}"
     elif swarm_name:
-        deadline = time.monotonic() + TOOL_BUDGET_SECONDS
         swarms = classic.list_swarms(group=(group or "").strip(), deadline=deadline)
         found = [s for s in swarms if _matches(s.get("swarm_name"), swarm_name)]
         if not found:
@@ -1171,8 +1170,7 @@ def firmware_versions(device_type: str = "IAP", swarm_name: str = "", group: str
             )
         params = {"swarm_id": found[0].get("swarm_id")}
         label = f"swarm={found[0].get('swarm_name')}"
-    doc = classic.get(PATH_FW_VERSIONS, params)
-    items = [v for v in (doc.get("data") or []) if isinstance(v, dict)]
+    items = classic.list_versions(params, deadline)
     if not items:
         return f"No firmware versions returned ({label})."
     lines = [f"# Firmware Versions ({label}, {len(items)} total)", ""]

@@ -9,6 +9,7 @@ strings of Classic ``status.state`` / ``status.reason`` are made up for the test
 
 import asyncio
 import os
+import time
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +17,6 @@ import pytest
 from aruba_central_mcp import server
 from aruba_central_mcp.classic import (
     PATH_FW_COMPLIANCE,
-    PATH_FW_VERSIONS,
     ClassicAuthError,
     ClassicDeadline,
     ClassicError,
@@ -122,9 +122,11 @@ class FakeClassic:
             if params["group"] == self.compliance_fail:
                 raise ClassicError("Classic API error (/firmware/v1/upgrade/compliance_version): HTTP 400")
             return COMPLIANCE.get(params["group"], {})
-        if path == PATH_FW_VERSIONS:
-            return {"data": [{"firmware_version": "8.13.3.1_2", "release_status": "release", "create_date": "2026-10-20"}]}
         return {}
+
+    def list_versions(self, params, deadline=None):
+        self.calls.append(("versions", params, deadline))
+        return [{"firmware_version": "8.13.3.1_2", "release_status": "release", "create_date": "2026-10-20"}]
 
     def close(self):
         pass
@@ -401,6 +403,23 @@ class TestFirmwareVersions:
         with patch.object(server, "_get_classic", return_value=FakeClassic()):
             out = server.firmware_versions(swarm_id="c1", swarm_name="ignored")
         assert out.startswith("# Firmware Versions (swarm_id=c1, 1 total)")
+
+    def test_versions_read_runs_under_the_tool_deadline(self):
+        fake = FakeClassic()
+        before = time.monotonic()
+        with patch.object(server, "_get_classic", return_value=fake):
+            server.firmware_versions("iap")
+        _, params, deadline = fake.calls[-1]
+        assert params == {"device_type": "IAP"}
+        assert before < deadline <= time.monotonic() + server.TOOL_BUDGET_SECONDS
+
+    def test_empty_list_says_so(self):
+        class Empty(FakeClassic):
+            def list_versions(self, params, deadline=None):
+                return []
+
+        with patch.object(server, "_get_classic", return_value=Empty()):
+            assert server.firmware_versions() == "No firmware versions returned (device_type=IAP)."
 
     def test_not_configured_is_an_error(self):
         with patch.object(server, "_get_classic", return_value=None):

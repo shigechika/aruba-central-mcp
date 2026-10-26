@@ -28,6 +28,7 @@ import re
 import sys
 import tempfile
 import time
+from typing import Any
 
 import httpx
 
@@ -309,7 +310,28 @@ class ClassicClient:
     # -- requests -----------------------------------------------------------
 
     def get(self, path: str, params: dict | None = None, deadline: float | None = None) -> dict:
-        """GET a Classic API path; a 401 triggers one refresh and one retry. Returns a JSON object.
+        """GET a Classic API path whose response is a JSON object (see ``_get_json``)."""
+        body = self._get_json(path, params, deadline)
+        if not isinstance(body, dict):
+            raise ClassicError(f"Classic API error ({path}): response is not a JSON object")
+        return body
+
+    def list_versions(self, params: dict, deadline: float | None = None) -> list[dict]:
+        """Rows of ``/firmware/v1/versions``. The live API returns a bare JSON array;
+        a ``{"data": [...]}`` wrapper is accepted as well, with a null ``data`` read as
+        no rows. Any other shape, or a row that is not an object, is a ClassicError
+        rather than an empty list."""
+        body = self._get_json(PATH_FW_VERSIONS, params, deadline)
+        if isinstance(body, dict) and "data" in body:
+            body = body["data"] or []
+        if not isinstance(body, list):
+            raise ClassicError(f"Classic API error ({PATH_FW_VERSIONS}): response is not a list")
+        if not all(isinstance(row, dict) for row in body):
+            raise ClassicError(f"Classic API error ({PATH_FW_VERSIONS}): a row is not a JSON object")
+        return body
+
+    def _get_json(self, path: str, params: dict | None = None, deadline: float | None = None) -> Any:
+        """GET a Classic API path; a 401 triggers one refresh and one retry. Returns the parsed JSON.
 
         ``deadline`` (time.monotonic()) bounds every request made here: ClassicDeadline
         is raised instead of starting one with less than a second left, and the HTTP
@@ -345,8 +367,6 @@ class ClassicClient:
                 body = resp.json()
             except ValueError as e:
                 raise ClassicError(f"Classic API error ({path}): response is not JSON") from e
-            if not isinstance(body, dict):
-                raise ClassicError(f"Classic API error ({path}): response is not a JSON object")
             return body
         raise ClassicError(f"Classic API error ({path}): unauthorized after refresh")  # pragma: no cover
 
