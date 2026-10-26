@@ -143,10 +143,10 @@ class TestRequests:
                 make(token_file).get(PATH_FW_SWARMS)
 
     def test_list_versions_reads_the_bare_array(self, token_file):
-        rows = [{"firmware_version": "8.13.3.1_2", "release_status": "release"}, "junk"]
+        rows = [{"firmware_version": "8.13.3.1_2", "release_status": "release"}]
         with respx.mock:
             route = respx.get(f"{BASE}{PATH_FW_VERSIONS}").mock(return_value=httpx.Response(200, json=rows))
-            assert make(token_file).list_versions({"device_type": "IAP"}) == rows[:1]
+            assert make(token_file).list_versions({"device_type": "IAP"}) == rows
         assert route.calls[0].request.url.params["device_type"] == "IAP"
 
     def test_list_versions_accepts_a_data_wrapper(self, token_file):
@@ -156,10 +156,26 @@ class TestRequests:
             )
             assert make(token_file).list_versions({"device_type": "IAP"}) == [{"firmware_version": "8.13.3.1_2"}]
 
-    def test_list_versions_rejects_other_shapes(self, token_file):
+    @pytest.mark.parametrize("body", [{"data": None}, {"data": []}, []])
+    def test_list_versions_empty_shapes_are_no_rows(self, token_file, body):
         with respx.mock:
-            respx.get(f"{BASE}{PATH_FW_VERSIONS}").mock(return_value=httpx.Response(200, json={"message": "x"}))
-            with pytest.raises(ClassicError, match="response is not a list"):
+            respx.get(f"{BASE}{PATH_FW_VERSIONS}").mock(return_value=httpx.Response(200, json=body))
+            assert make(token_file).list_versions({"device_type": "IAP"}) == []
+
+    @pytest.mark.parametrize(
+        ("body", "message"),
+        [
+            ({"message": "x"}, "response is not a list"),
+            ({}, "response is not a list"),
+            ({"data": {"a": 1}}, "response is not a list"),
+            (["8.13.3.1_2"], "a row is not a JSON object"),
+            ({"data": [{"firmware_version": "x"}, 1]}, "a row is not a JSON object"),
+        ],
+    )
+    def test_list_versions_rejects_other_shapes(self, token_file, body, message):
+        with respx.mock:
+            respx.get(f"{BASE}{PATH_FW_VERSIONS}").mock(return_value=httpx.Response(200, json=body))
+            with pytest.raises(ClassicError, match=message):
                 make(token_file).list_versions({"device_type": "IAP"})
 
     def test_get_still_requires_an_object(self, token_file):

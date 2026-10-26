@@ -28,6 +28,7 @@ import re
 import sys
 import tempfile
 import time
+from typing import Any
 
 import httpx
 
@@ -317,14 +318,19 @@ class ClassicClient:
 
     def list_versions(self, params: dict, deadline: float | None = None) -> list[dict]:
         """Rows of ``/firmware/v1/versions``. The live API returns a bare JSON array;
-        a ``{"data": [...]}`` wrapper is accepted as well."""
+        a ``{"data": [...]}`` wrapper is accepted as well, with a null ``data`` read as
+        no rows. Any other shape, or a row that is not an object, is a ClassicError
+        rather than an empty list."""
         body = self._get_json(PATH_FW_VERSIONS, params, deadline)
-        rows = body.get("data") if isinstance(body, dict) else body
-        if not isinstance(rows, list):
+        if isinstance(body, dict) and "data" in body:
+            body = body["data"] or []
+        if not isinstance(body, list):
             raise ClassicError(f"Classic API error ({PATH_FW_VERSIONS}): response is not a list")
-        return [row for row in rows if isinstance(row, dict)]
+        if not all(isinstance(row, dict) for row in body):
+            raise ClassicError(f"Classic API error ({PATH_FW_VERSIONS}): a row is not a JSON object")
+        return body
 
-    def _get_json(self, path: str, params: dict | None = None, deadline: float | None = None):
+    def _get_json(self, path: str, params: dict | None = None, deadline: float | None = None) -> Any:
         """GET a Classic API path; a 401 triggers one refresh and one retry. Returns the parsed JSON.
 
         ``deadline`` (time.monotonic()) bounds every request made here: ClassicDeadline
