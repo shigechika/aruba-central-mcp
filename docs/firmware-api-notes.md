@@ -123,7 +123,7 @@ and `url_utils.FirmwareManagementUrl`.
 | `GET /firmware/v1/swarms` | `group`, `limit` (default 20, max 1000), `offset` | `swarms[]`: `swarm_id`, `swarm_name`, `firmware_version`, `recommended`, `upgrade_required`, `device_status` (Up/Down), `aps_count`, `aps[]` (`serial`, `name`, `model`, `mac_address`), `status` {`state`, `reason`, `firmware_scheduled_at`}; `swarm_count` |
 | `GET /firmware/v1/swarms/{swarm_id}` | – | one swarm (pycentral `get_firmware_swarm`; shape not re-checked) |
 | `GET /firmware/v1/status` | `swarm_id` (IAP) or `serial`, not both | `state`, `reason`, `firmware_scheduled_at` |
-| `GET /firmware/v1/versions` | `device_type` (IAP/MAS/HP/CX/CONTROLLER) or `swarm_id` or `serial` | `data[]`: `firmware_version`, `release_status` (`release`/`beta`), `create_date` |
+| `GET /firmware/v1/versions` | `device_type` (IAP/MAS/HP/CX/CONTROLLER) or `swarm_id` or `serial` | a bare JSON array (no `data` wrapper; checked live 2026-10-27): `firmware_version`, `release_status` (`release`/`beta`), `create_date` |
 | `GET /firmware/v1/upgrade/compliance_version` | `device_type` (required), `group` (omit for customer level) | `firmware_compliance_version`, `compliance_scheduled_at` |
 | `POST /firmware/v1/upgrade` | body: `swarm_id`, `serial`, `group` + `device_type`, `firmware_version` (omitted = recommended), `firmware_scheduled_at` (epoch s, default now), `reboot` (ignored for IAP: "IAP reboots automatically"), `model` (switches only), `forced` (gateway cluster) | `success_list[]`, `failed_list[]` ({`hostname`, `reason`}), `message` (bulk upgrades run in the background with both lists empty) |
 | `POST /firmware/v1/upgrade/cancel` | body: `swarm_id` or `serial`, or `group` + `device_type` | `status` |

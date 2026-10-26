@@ -27,7 +27,6 @@ from mcp.shared.exceptions import MCPError
 from aruba_central_mcp import __version__
 from aruba_central_mcp.classic import (
     PATH_FW_COMPLIANCE,
-    PATH_FW_VERSIONS,
     ClassicAuthError,
     ClassicClient,
     ClassicDeadline,
@@ -1171,8 +1170,7 @@ def firmware_versions(device_type: str = "IAP", swarm_name: str = "", group: str
             )
         params = {"swarm_id": found[0].get("swarm_id")}
         label = f"swarm={found[0].get('swarm_name')}"
-    doc = classic.get(PATH_FW_VERSIONS, params)
-    items = [v for v in (doc.get("data") or []) if isinstance(v, dict)]
+    items = classic.list_versions(params)
     if not items:
         return f"No firmware versions returned ({label})."
     lines = [f"# Firmware Versions ({label}, {len(items)} total)", ""]
