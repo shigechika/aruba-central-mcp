@@ -23,7 +23,7 @@ python3 -m py_compile aruba_central_mcp/client.py   # syntax check
 ```
 
 This mirrors `.github/workflows/test.yml` (`pip install -e ".[test]"` +
-`pytest tests/ -v`, matrix over Python 3.10–3.14, plus one Windows job
+`pytest tests/ -v`, matrix over Python 3.11–3.15, plus one Windows job
 specifically to catch stdio newline regressions —
 see `modelcontextprotocol/python-sdk#2433`), plus a `lint` job running
 `ruff check .` at the pinned version. Lint findings are therefore already
@@ -96,7 +96,7 @@ precedent to copy elsewhere.)
   docstring that omits parameter formats an LLM would otherwise have to
   guess (e.g. the MAC address format `client.py` expects).
 
-## 4. Python 3.10 compatibility is a project convention, follow it as written
+## 4. The annotation style is a project convention, follow it as written
 
 Per `CLAUDE.md`: no `X | Y` union syntax in runtime code; every runtime
 module (`server.py`, `client.py`, `__main__.py`) uses
