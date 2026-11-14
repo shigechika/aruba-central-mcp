@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/shigechika/aruba-central-mcp/compare/v0.10.2...v0.11.0) (2026-11-14)
+
+
+### Features
+
+* drop Python 3.10 (EOL) and add Python 3.15 support ([#74](https://github.com/shigechika/aruba-central-mcp/issues/74)) ([9c573be](https://github.com/shigechika/aruba-central-mcp/commit/9c573bed610e523a860837bf8f6636ea2142ae98))
+
 ## [0.10.2](https://github.com/shigechika/aruba-central-mcp/compare/v0.10.1...v0.10.2) (2026-10-26)
 
 
