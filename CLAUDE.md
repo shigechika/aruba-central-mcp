@@ -29,7 +29,7 @@ python3 -m py_compile aruba_central_mcp/client.py  # syntax check
 
 - Public repository: comments, commit messages, and documentation in English
 - Docstrings in English
-- Python 3.10+ compatible (no `X | Y` union syntax in runtime code; use `from __future__ import annotations`)
+- Python 3.11+ (no `X | Y` union syntax in runtime code; use `from __future__ import annotations`)
 - Tests use `respx` for HTTP mocking and `unittest.mock` for server-level mocking
 - `scripts/` holds the live smoke test: `smoke_test.py` (CLI), its per-tool
   specs in `smoke_probes.py`, and `smoke_harness.py` — the server-agnostic

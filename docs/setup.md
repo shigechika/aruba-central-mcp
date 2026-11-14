@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Aruba Central account with API access (GreenLake New Central API)
 - OAuth2 client credentials (client ID and secret)
 

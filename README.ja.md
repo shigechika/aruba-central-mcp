@@ -61,7 +61,7 @@
 
 ## 前提条件
 
-- Python 3.10 以上
+- Python 3.11 以上
 - Aruba Central アカウント（API アクセス権付き）
 - OAuth2 クライアント資格情報（クライアント ID とシークレット）
 
